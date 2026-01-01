@@ -1,75 +1,72 @@
 import AppKit
 import SwiftUI
+import DynamicNotchKit
 
+@MainActor
 final class OverlayPanelController {
-    private var panel: NSPanel?
+    private var notch: (any DynamicNotchControllable)?
     private let scriptStorage: ScriptStorage
     private let scrollingController: ScrollingController
+    private var onCloseHandler: (() -> Void)?
 
-    // Notch dimensions (MacBook Pro 14"/16")
-    private let notchWidth: CGFloat = 180
-    private let notchHeight: CGFloat = 32
-    private let panelWidth: CGFloat = 340
-    private let panelHeight: CGFloat = 140
+    private var isExpanded = false
 
     var isVisible: Bool {
-        panel?.isVisible ?? false
+        isExpanded
     }
 
     init(scriptStorage: ScriptStorage, scrollingController: ScrollingController) {
         self.scriptStorage = scriptStorage
         self.scrollingController = scrollingController
-        setupPanel()
-    }
-
-    private func setupPanel() {
-        guard let screen = NSScreen.main else { return }
-
-        // Position: centered horizontally, flush with top of screen (below menu bar)
-        let menuBarHeight: CGFloat = NSStatusBar.system.thickness
-        let xPos = (screen.frame.width - panelWidth) / 2
-        let yPos = screen.frame.height - panelHeight - menuBarHeight
-
-        panel = NSPanel(
-            contentRect: NSRect(x: xPos, y: yPos, width: panelWidth, height: panelHeight),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-
-        guard let panel else { return }
-
-        // THE MAGIC LINE: Makes overlay invisible in screen shares
-        panel.sharingType = .none
-
-        panel.level = .statusBar
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        panel.ignoresMouseEvents = false
-        panel.isMovableByWindowBackground = false
-
-        let contentView = NotchOverlayView(
-            scriptStorage: scriptStorage,
-            scrollingController: scrollingController
-        )
-        panel.contentView = NSHostingView(rootView: contentView)
     }
 
     func show() {
-        panel?.orderFront(nil)
+        if notch == nil {
+            createNotch()
+        }
+
+        Task {
+            await notch?.expand(on: NSScreen.main ?? NSScreen.screens[0])
+            isExpanded = true
+
+            // Find the window and set sharingType = .none for screen share invisibility
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if let window = NSApp.windows.first(where: { $0.level == .screenSaver && $0 is NSPanel }) as? NSPanel {
+                    window.sharingType = .none
+                }
+            }
+        }
     }
 
     func hide() {
-        panel?.orderOut(nil)
+        Task {
+            await notch?.hide()
+            isExpanded = false
+        }
     }
 
     func toggle() {
-        if isVisible {
+        if isExpanded {
             hide()
         } else {
             show()
+        }
+    }
+
+    private func createNotch() {
+        let contentView = NotchContentView(
+            scriptStorage: scriptStorage,
+            scrollingController: scrollingController,
+            onClose: { [weak self] in
+                self?.hide()
+            }
+        )
+
+        notch = DynamicNotch(
+            hoverBehavior: [.keepVisible, .hapticFeedback],
+            style: .auto
+        ) {
+            contentView
         }
     }
 }

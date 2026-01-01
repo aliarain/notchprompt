@@ -1,69 +1,75 @@
 import SwiftUI
 
-struct NotchOverlayView: View {
+struct NotchContentView: View {
     @ObservedObject var scriptStorage: ScriptStorage
     @ObservedObject var scrollingController: ScrollingController
+    var onClose: () -> Void
+
     @State private var isHovering = false
 
-    @AppStorage("overlay.fontSize") private var fontSize: Double = 18
+    @AppStorage("overlay.fontSize") private var fontSize: Double = 14
     @AppStorage("overlay.textColor") private var textColorHex: String = "#FFFFFF"
 
-    private let notchWidth: CGFloat = 180
-
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                // Notch-shaped background
-                NotchShape(notchWidth: notchWidth, notchHeight: 0)
-                    .fill(.black)
-
-                // Content
-                VStack(spacing: 0) {
-                    // Script text area
-                    ScrollView(.vertical, showsIndicators: false) {
-                        Text(scriptStorage.currentScript?.content ?? "No script loaded")
-                            .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                            .foregroundColor(Color(hex: textColorHex))
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(6)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 12)
-                            .padding(.bottom, 8)
-                            .frame(maxWidth: .infinity)
+        VStack(spacing: 4) {
+            // Top bar with close button (only on hover)
+            HStack {
+                Spacer()
+                if isHovering {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
                     }
-                    .offset(y: -scrollingController.scrollOffset)
-                    .clipped()
-
-                    // Minimal controls - only show on hover
-                    if isHovering {
-                        HStack(spacing: 20) {
-                            Button(action: { scrollingController.scrollUp() }) {
-                                Image(systemName: "chevron.up")
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .buttonStyle(MinimalButtonStyle())
-
-                            Button(action: { scrollingController.toggleAutoScroll() }) {
-                                Image(systemName: scrollingController.isScrolling ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .buttonStyle(MinimalButtonStyle())
-
-                            Button(action: { scrollingController.scrollDown() }) {
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .buttonStyle(MinimalButtonStyle())
-                        }
-                        .padding(.bottom, 8)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(.white.opacity(0.15)))
+                    .transition(.opacity)
                 }
             }
-            .clipShape(NotchShape(notchWidth: notchWidth, notchHeight: 0))
+            .frame(height: isHovering ? 20 : 4)
+            .padding(.horizontal, 8)
+
+            // Script text
+            ScrollView(.vertical, showsIndicators: false) {
+                Text(scriptStorage.currentScript?.content ?? "No script loaded")
+                    .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                    .foregroundColor(Color(hex: textColorHex))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+            }
+            .offset(y: -scrollingController.scrollOffset)
+
+            // Bottom controls (only on hover)
+            if isHovering {
+                HStack(spacing: 12) {
+                    Button(action: { scrollingController.scrollUp() }) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .buttonStyle(NotchButtonStyle())
+
+                    Button(action: { scrollingController.toggleAutoScroll() }) {
+                        Image(systemName: scrollingController.isScrolling ? "pause.fill" : "play.fill")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .buttonStyle(NotchButtonStyle())
+
+                    Button(action: { scrollingController.scrollDown() }) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .buttonStyle(NotchButtonStyle())
+                }
+                .padding(.bottom, 6)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
+        .frame(width: 320, height: 140)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
             }
         }
@@ -75,83 +81,22 @@ struct NotchOverlayView: View {
     private func setupKeyboardShortcuts() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             switch event.keyCode {
-            case 126: // Up arrow
-                scrollingController.scrollUp()
-                return nil
-            case 125: // Down arrow
-                scrollingController.scrollDown()
-                return nil
-            case 49: // Space
-                scrollingController.toggleAutoScroll()
-                return nil
-            default:
-                return event
+            case 126: scrollingController.scrollUp(); return nil
+            case 125: scrollingController.scrollDown(); return nil
+            case 49: scrollingController.toggleAutoScroll(); return nil
+            case 53: onClose(); return nil // Escape to close
+            default: return event
             }
         }
     }
 }
 
-// Custom shape that creates a notch-like appearance
-struct NotchShape: Shape {
-    let notchWidth: CGFloat
-    let notchHeight: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let cornerRadius: CGFloat = 18
-
-        // Start from top-left, go around
-        path.move(to: CGPoint(x: 0, y: cornerRadius))
-
-        // Top-left corner
-        path.addQuadCurve(
-            to: CGPoint(x: cornerRadius, y: 0),
-            control: CGPoint(x: 0, y: 0)
-        )
-
-        // Top edge to top-right corner
-        path.addLine(to: CGPoint(x: rect.width - cornerRadius, y: 0))
-
-        // Top-right corner
-        path.addQuadCurve(
-            to: CGPoint(x: rect.width, y: cornerRadius),
-            control: CGPoint(x: rect.width, y: 0)
-        )
-
-        // Right edge
-        path.addLine(to: CGPoint(x: rect.width, y: rect.height - cornerRadius))
-
-        // Bottom-right corner
-        path.addQuadCurve(
-            to: CGPoint(x: rect.width - cornerRadius, y: rect.height),
-            control: CGPoint(x: rect.width, y: rect.height)
-        )
-
-        // Bottom edge
-        path.addLine(to: CGPoint(x: cornerRadius, y: rect.height))
-
-        // Bottom-left corner
-        path.addQuadCurve(
-            to: CGPoint(x: 0, y: rect.height - cornerRadius),
-            control: CGPoint(x: 0, y: rect.height)
-        )
-
-        // Left edge back to start
-        path.addLine(to: CGPoint(x: 0, y: cornerRadius))
-
-        return path
-    }
-}
-
-struct MinimalButtonStyle: ButtonStyle {
+struct NotchButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundColor(.white.opacity(configuration.isPressed ? 0.5 : 0.7))
-            .frame(width: 24, height: 24)
-            .background(
-                Circle()
-                    .fill(.white.opacity(configuration.isPressed ? 0.2 : 0.1))
-            )
+            .foregroundColor(.white.opacity(configuration.isPressed ? 0.4 : 0.7))
+            .frame(width: 18, height: 18)
+            .background(Circle().fill(.white.opacity(0.1)))
     }
 }
 
@@ -162,21 +107,11 @@ extension Color {
         Scanner(string: hex).scanHexInt64(&int)
         let a, r, g, b: UInt64
         switch hex.count {
-        case 3:
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6:
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8:
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (255, 255, 255, 255)
+        case 3: (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default: (a, r, g, b) = (255, 255, 255, 255)
         }
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
-        )
+        self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: Double(a) / 255)
     }
 }

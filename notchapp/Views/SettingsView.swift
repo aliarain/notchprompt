@@ -3,7 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var scrollingController: ScrollingController
 
-    @AppStorage("overlay.fontSize") private var fontSize: Double = 28
+    @AppStorage("overlay.fontSize") private var fontSize: Double = 16
     @AppStorage("overlay.opacity") private var backgroundOpacity: Double = 0.85
     @AppStorage("overlay.textColor") private var textColorHex: String = "#FFFFFF"
 
@@ -12,7 +12,7 @@ struct SettingsView: View {
             Section {
                 LabeledContent("Font Size") {
                     HStack {
-                        Slider(value: $fontSize, in: 14...48, step: 2)
+                        Slider(value: $fontSize, in: 12...28, step: 1)
                         Text("\(Int(fontSize))pt")
                             .monospacedDigit()
                             .frame(width: 40)

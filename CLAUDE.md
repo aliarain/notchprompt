@@ -31,9 +31,16 @@ open notchapp.xcodeproj
 Menu Bar Icon (NSStatusItem)
     ↓
 ┌─────────────────────────────┐
-│ Overlay Panel               │ ← NSPanel, sharingType = .none
-│ - Script text display       │   (invisible in screen shares)
-│ - Scroll controls           │
+│ DynamicNotchKit             │ ← True notch integration
+│ - Expands from Mac notch    │   (Dynamic Island-style)
+│ - sharingType = .none       │   (invisible in screen shares)
+└─────────────────────────────┘
+    ↓
+┌─────────────────────────────┐
+│ NotchContentView            │
+│ - Script text display       │
+│ - Scroll controls on hover  │
+│ - Close button on hover     │
 └─────────────────────────────┘
     ↓
 ┌─────────────────────────────┐
