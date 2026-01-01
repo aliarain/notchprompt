@@ -1,0 +1,127 @@
+Product Requirements Document (PRD): NotchPrompt - A Next-Gen Teleprompter App for Mac
+Version History
+
+Version 1.0 (Draft): January 1, 2026
+Author: Grok (Acting as YC-Alum Founder/PM in Founder Mode)
+Status: Initial Draft for MVP Build
+
+As a YC-based founder in full founder mode, I'm going hard on this. We're not just copying Notchie.app—we're building something better, scrappier, and more user-obsessed. Notchie is great for basic teleprompting in the Mac notch, but it's Mac-only, voice-scroll heavy, and lacks ecosystem integration. Our app, NotchPrompt, will dominate by being cross-platform eventually (start Mac, expand to Windows/iOS), AI-enhanced, and hyper-focused on creators, salespeople, and educators who live in video calls. We'll ship an MVP in 3 months, iterate based on user feedback, and aim for viral growth via free tier + referrals.
+This PRD is features-deep: I'll break down core, advanced, and future features with user stories, priorities (P0 = must-have for MVP, P1 = post-MVP, P2 = nice-to-have), success criteria, and edge cases. No fluff—let's build and ship.
+1. Product Overview
+Problem Statement
+In video calls, presentations, and recordings, users struggle to maintain eye contact while reading scripts—leading to awkward glances at notes or screens. Existing teleprompters are bulky hardware or clunky apps that don't integrate seamlessly with tools like Zoom or OBS. Notchie solves part of this for Mac notches but lacks smart AI pacing, multi-device sync, collaboration, and analytics. Users waste time practicing, lose flow, and appear unprepared.
+Solution
+NotchPrompt is a lightweight, notch-optimized teleprompter app that overlays scripts invisibly during screen shares. It uses AI for natural scrolling, supports outlines/bullets/cues, and integrates with calendars/CRMs for seamless workflows. Core innovation: AI-driven "flow mode" that adapts to your speaking style in real-time, plus exportable performance insights.
+Target Audience
+
+Primary: Sales reps, content creators, educators/podcasters (e.g., YC founders pitching, teachers in virtual classes).
+Secondary: Executives, journalists, anyone doing frequent video calls.
+Persona Example: Alex, 28, sales manager at a startup. Does 5+ Zoom demos/day. Needs quick script loading, natural eye contact, and post-call notes on pacing.
+
+Key Goals
+
+MVP Launch: Mac-only, free beta with premium upsell.
+Metrics for Success: 10K downloads in 3 months, 30% retention, NPS > 8.
+Monetization: Freemium—one-time $49 lifetime (like Notchie), or $9/mo premium for AI features.
+Differentiation: AI smarts + integrations > basic scrolling.
+
+2. Features
+Features are prioritized for MVP. We'll use Agile: Build core loop first (script input → overlay → scrolling), then add polish. All features assume 100% local processing for privacy—no cloud unless opt-in for sync.
+2.1 Core Features (P0: MVP Must-Haves)
+These form the basic teleprompter experience, inspired by Notchie but improved.
+
+Notch Overlay Positioning
+Description: Positions script text directly below/around the MacBook notch (or webcam on non-notch Macs) for natural eye contact. Overlay is invisible in screen shares via macOS layering (works with Zoom, Teams, Meet, OBS, etc.).
+Enhancements: Auto-detects camera position; supports external webcams/monitors with manual calibration.
+User Story: As Alex, I want my script to appear next to the camera so I look engaged without glancing away.
+Edge Cases: Handles notch-less Macs (e.g., older models) by floating overlay; resizes for different screen resolutions.
+Success Criteria: 95% users report better eye contact in beta feedback.
+
+Script Input and Editing
+Description: Simple editor for pasting/typing scripts, outlines, bullets, or cues (e.g., "Smile", "Pause 3s", "Ask question"). Supports markdown for formatting (bold, italics, colors).
+Enhancements: Import from Google Docs, Notion, or clipboard; auto-suggest structure (e.g., Intro → Key Points → CTA).
+User Story: As Alex, I want to quickly paste my sales script and edit on-the-fly without leaving the app.
+Edge Cases: Handles long scripts (>10K words) with pagination; undo/redo stack.
+Success Criteria: <5s load time for scripts.
+
+Voice-Activated Scrolling (AI Flow Mode)
+Description: Primary mode—text scrolls as you speak, using local speech-to-text (via macOS APIs) to match pace. Pauses when you pause; speeds up/slows down dynamically. Adjustable sensitivity for accents/noise.
+Enhancements: AI predicts pauses (e.g., based on punctuation); fallback to manual/auto-scroll if voice fails.
+User Story: As Alex, I want the script to follow my natural speaking rhythm so I never lose my place.
+Edge Cases: Noisy environments (tune mic threshold); multilingual support (English first, add Spanish/French P1).
+Success Criteria: 80% accuracy in pacing tests; <1% false positives on pauses.
+
+Manual and Auto-Scroll Controls
+Description: Fallback modes—auto-scroll at set WPM (words per minute, adjustable 100-300); manual via mouse wheel or keyboard (↑/↓ for lines, Shift+←/→ for speed). Hover to pause.
+Enhancements: Global hotkeys (e.g., Cmd+Space to toggle); touch bar integration for MacBooks.
+User Story: As Alex, I want quick controls if voice mode glitches during a call.
+Edge Cases: Conflicts with other app shortcuts—allow remapping.
+Success Criteria: Intuitive for 90% new users (A/B test).
+
+Customization Options
+Description: Adjust font size (10-50pt), family (sans-serif defaults), color, background opacity (0-50% for subtlety), and overlay width/height.
+Enhancements: Themes (dark/light mode auto-sync); save presets per script type (e.g., "Sales Demo" vs. "Podcast").
+User Story: As Alex, I want to tweak visibility for my lighting setup.
+Edge Cases: High-contrast mode for accessibility; persists settings across sessions.
+Success Criteria: User satisfaction >4/5 in surveys.
+
+
+2.2 Advanced Features (P1: Post-MVP, 1-3 Months Post-Launch)
+These add stickiness and monetization hooks.
+
+AI Script Enhancement
+Description: Premium: AI (local LLM like Llama) suggests improvements—e.g., shorten sentences, add pauses, generate cues from outline. Analyzes script for readability (Flesch score).
+User Story: As Alex, I want AI to polish my rough notes into a pro script.
+Edge Cases: Opt-out for privacy; handle sensitive content.
+Success Criteria: 50% premium users engage weekly.
+
+Performance Analytics
+Description: Premium: Post-call reports—speaking speed, filler words detected, pause frequency. Export to PDF/CSV.
+User Story: As Alex, I want insights to improve my delivery over time.
+Edge Cases: Anonymized data; delete after 30 days.
+Success Criteria: Drives 20% upgrade rate.
+
+Integrations
+Description: Sync with Calendar (auto-load script for meetings), CRM (HubSpot/Salesforce for deal notes), or Notion for script storage.
+User Story: As Alex, I want scripts pulled from my CRM for each call.
+Edge Cases: API rate limits; secure auth.
+Success Criteria: 30% users connect at least one integration.
+
+Collaboration Mode
+Description: Share scripts with team for real-time edits (opt-in cloud sync).
+User Story: As a team lead, I want co-editing for group presentations.
+Edge Cases: Version control; offline fallback.
+Success Criteria: Used in 10% of sessions.
+
+
+2.3 Future Features (P2: 6+ Months, Based on Data)
+
+Cross-Platform: Windows version (webcam overlay); iOS for iPhone as remote prompter.
+AR Mode: For glasses/webcams, project text virtually (partner with AR firms).
+Community Templates: User-shared script structures (e.g., YC pitch templates).
+Voice Coaching: Real-time feedback (e.g., "Slow down" popups).
+
+3. Technical Requirements
+
+Platform: macOS 14+ (Apple Silicon native; Intel support).
+Dependencies: Local STT (Speech Framework), no external APIs for core.
+Security: All local; GDPR-compliant for EU users.
+Performance: <100MB app size; <5% CPU during use.
+Testing: Unit tests for scrolling accuracy; beta with 100 users.
+
+4. User Flows
+
+Onboard: Install → Quick tour → Paste first script → Test in mock call.
+Core Loop: Edit script → Customize → Start call → Scroll → Analyze (premium).
+
+5. Risks and Mitigations
+
+Risk: macOS updates break overlay—Mitigate: Monitor betas, quick patches.
+Risk: Low adoption—Mitigate: Viral hooks like "Share your improved pitch" referrals.
+Risk: AI inaccuracies—Mitigate: Fallback modes, user tuning.
+
+6. Launch Plan
+
+MVP Scope: Core features only.
+Timeline: Dev 2 months, Beta 1 month, Launch Q2 2026.
+Go-to-Market: Post on Product Hunt, Reddit (r/sales, r/macapps), YC network. Target 1K beta signups.
