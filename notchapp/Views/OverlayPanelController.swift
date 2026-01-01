@@ -4,10 +4,9 @@ import DynamicNotchKit
 
 @MainActor
 final class OverlayPanelController {
-    private var notch: (any DynamicNotchControllable)?
+    private var notch: DynamicNotch<TeleprompterContentView, EmptyView, EmptyView>?
     private let scriptStorage: ScriptStorage
     private let scrollingController: ScrollingController
-    private var onCloseHandler: (() -> Void)?
 
     private var isExpanded = false
 
@@ -21,18 +20,20 @@ final class OverlayPanelController {
     }
 
     func show() {
-        if notch == nil {
-            createNotch()
-        }
+        // Always recreate to ensure fresh state
+        createNotch()
 
         Task {
-            await notch?.expand(on: NSScreen.main ?? NSScreen.screens[0])
+            guard let notch else { return }
+            await notch.expand()
             isExpanded = true
 
-            // Find the window and set sharingType = .none for screen share invisibility
+            // Set sharingType = .none for screen share invisibility
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                if let window = NSApp.windows.first(where: { $0.level == .screenSaver && $0 is NSPanel }) as? NSPanel {
-                    window.sharingType = .none
+                for window in NSApp.windows {
+                    if window.level == .screenSaver, let panel = window as? NSPanel {
+                        panel.sharingType = .none
+                    }
                 }
             }
         }
@@ -42,6 +43,7 @@ final class OverlayPanelController {
         Task {
             await notch?.hide()
             isExpanded = false
+            notch = nil
         }
     }
 
@@ -54,19 +56,21 @@ final class OverlayPanelController {
     }
 
     private func createNotch() {
-        let contentView = NotchContentView(
-            scriptStorage: scriptStorage,
-            scrollingController: scrollingController,
-            onClose: { [weak self] in
-                self?.hide()
-            }
-        )
+        // Capture values to avoid self reference in ViewBuilder
+        let storage = scriptStorage
+        let controller = scrollingController
 
         notch = DynamicNotch(
             hoverBehavior: [.keepVisible, .hapticFeedback],
             style: .auto
         ) {
-            contentView
+            TeleprompterContentView(
+                scriptStorage: storage,
+                scrollingController: controller,
+                onClose: { [weak self] in
+                    self?.hide()
+                }
+            )
         }
     }
 }

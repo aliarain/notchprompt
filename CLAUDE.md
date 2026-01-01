@@ -27,7 +27,7 @@ open notchapp.xcodeproj
 
 ## Architecture
 
-```
+```text
 Menu Bar Icon (NSStatusItem)
     ↓
 ┌─────────────────────────────┐
@@ -53,14 +53,14 @@ Menu Bar Icon (NSStatusItem)
 
 ### File Structure
 
-```
+```text
 notchapp/
 ├── App/
 │   ├── NotchPromptApp.swift       # @main entry point
-│   └── AppDelegate.swift          # Menu bar + overlay management
+│   └── AppDelegate.swift          # Menu bar + overlay management (@MainActor)
 ├── Views/
-│   ├── OverlayPanelController.swift  # NSPanel setup with sharingType = .none
-│   ├── OverlayContentView.swift      # Script display with scroll controls
+│   ├── OverlayPanelController.swift  # DynamicNotchKit integration
+│   ├── OverlayContentView.swift      # NotchContentView with hover controls
 │   ├── ScriptEditorView.swift        # Script list + text editor
 │   └── SettingsView.swift            # Appearance + scrolling settings
 ├── Core/
@@ -76,26 +76,42 @@ notchapp/
 ## Key Technical Details
 
 **Screen Share Invisibility** - The critical line:
+
 ```swift
 panel.sharingType = .none  // Makes overlay invisible in screen shares
-panel.level = .floating
+```
+
+**DynamicNotchKit Integration:**
+
+```swift
+let notch = DynamicNotch(
+    hoverBehavior: [.keepVisible, .hapticFeedback],
+    style: .auto
+) {
+    NotchContentView(...)
+}
+await notch.expand()  // Shows from Mac notch
+await notch.hide()    // Hides with animation
 ```
 
 **Tech Stack:**
+
 - Swift + SwiftUI + AppKit
-- NSPanel for floating overlay window
+- DynamicNotchKit for true notch integration (Dynamic Island-style)
 - SFSpeechRecognizer for voice-activated scrolling
-- UserDefaults + JSON files for storage
+- UserDefaults for persistence
 - macOS 14+ minimum deployment target
 
 **App Type:** Menu bar app using NSStatusItem (no dock icon)
 
 ## Implemented Features
 
-- **Overlay** - Floating panel below notch, invisible in screen shares
+- **Notch Overlay** - Expands from Mac notch (Dynamic Island-style), invisible in screen shares
+- **Hover Controls** - Close button and scroll controls appear on hover
+- **Keyboard Shortcuts** - Arrow keys for scrolling, Space to toggle auto-scroll, ESC to close
 - **Script Editor** - Create, edit, delete scripts with word count
 - **3 Scroll Modes** - Manual (↑/↓ keys), Auto (WPM-based), Voice (speech recognition)
-- **Settings** - Font size, opacity, text color, scroll speed
+- **Settings** - Font size, text color, scroll speed
 - **Persistence** - Scripts saved to UserDefaults
 
 ## Post-MVP Features

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct NotchContentView: View {
+struct TeleprompterContentView: View {
     @ObservedObject var scriptStorage: ScriptStorage
     @ObservedObject var scrollingController: ScrollingController
     var onClose: () -> Void
@@ -11,67 +11,45 @@ struct NotchContentView: View {
     @AppStorage("overlay.textColor") private var textColorHex: String = "#FFFFFF"
 
     var body: some View {
-        VStack(spacing: 4) {
-            // Top bar with close button (only on hover)
-            HStack {
-                Spacer()
-                if isHovering {
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                    .frame(width: 16, height: 16)
-                    .background(Circle().fill(.white.opacity(0.15)))
-                    .transition(.opacity)
+        VStack(spacing: 12) {
+            // Script text content
+            Text(scriptStorage.currentScript?.content ?? "Welcome to NotchPrompt! Add a script to get started.")
+                .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                .foregroundColor(Color(hex: textColorHex))
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .lineLimit(4)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .offset(y: -scrollingController.scrollOffset.truncatingRemainder(dividingBy: 100))
+
+            // Controls
+            HStack(spacing: 20) {
+                Button(action: { scrollingController.scrollUp() }) {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 12, weight: .semibold))
                 }
-            }
-            .frame(height: isHovering ? 20 : 4)
-            .padding(.horizontal, 8)
+                .buttonStyle(TeleprompterButtonStyle())
 
-            // Script text
-            ScrollView(.vertical, showsIndicators: false) {
-                Text(scriptStorage.currentScript?.content ?? "No script loaded")
-                    .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                    .foregroundColor(Color(hex: textColorHex))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .padding(.horizontal, 16)
-                    .frame(maxWidth: .infinity)
-            }
-            .offset(y: -scrollingController.scrollOffset)
-
-            // Bottom controls (only on hover)
-            if isHovering {
-                HStack(spacing: 12) {
-                    Button(action: { scrollingController.scrollUp() }) {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                    .buttonStyle(NotchButtonStyle())
-
-                    Button(action: { scrollingController.toggleAutoScroll() }) {
-                        Image(systemName: scrollingController.isScrolling ? "pause.fill" : "play.fill")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                    .buttonStyle(NotchButtonStyle())
-
-                    Button(action: { scrollingController.scrollDown() }) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                    .buttonStyle(NotchButtonStyle())
+                Button(action: { scrollingController.toggleAutoScroll() }) {
+                    Image(systemName: scrollingController.isScrolling ? "pause.fill" : "play.fill")
+                        .font(.system(size: 12, weight: .semibold))
                 }
-                .padding(.bottom, 6)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .buttonStyle(TeleprompterButtonStyle())
+
+                Button(action: { scrollingController.scrollDown() }) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(TeleprompterButtonStyle())
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(TeleprompterButtonStyle())
             }
-        }
-        .frame(width: 320, height: 140)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovering = hovering
-            }
+            .padding(.bottom, 8)
         }
         .onAppear {
             setupKeyboardShortcuts()
@@ -84,19 +62,19 @@ struct NotchContentView: View {
             case 126: scrollingController.scrollUp(); return nil
             case 125: scrollingController.scrollDown(); return nil
             case 49: scrollingController.toggleAutoScroll(); return nil
-            case 53: onClose(); return nil // Escape to close
+            case 53: onClose(); return nil
             default: return event
             }
         }
     }
 }
 
-struct NotchButtonStyle: ButtonStyle {
+struct TeleprompterButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundColor(.white.opacity(configuration.isPressed ? 0.4 : 0.7))
-            .frame(width: 18, height: 18)
-            .background(Circle().fill(.white.opacity(0.1)))
+            .foregroundColor(.white.opacity(configuration.isPressed ? 0.5 : 0.8))
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(.white.opacity(0.15)))
     }
 }
 
