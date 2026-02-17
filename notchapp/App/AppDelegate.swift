@@ -84,7 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupGlobalHotkeys() {
-        let overlayMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        // Global monitor: works when OTHER apps are focused
+        // NOTE: Requires Accessibility permission in System Preferences
+        let globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.modifierFlags.contains([.command, .shift]) else { return }
             switch event.charactersIgnoringModifiers {
             case "o":
@@ -101,7 +103,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             }
         }
-        if let monitor = overlayMonitor {
+        if let monitor = globalMonitor {
+            globalMonitors.append(monitor)
+        }
+
+        // Local monitor: works when THIS app is focused (no permissions needed)
+        let localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Cmd+Shift shortcuts
+            if event.modifierFlags.contains([.command, .shift]) {
+                switch event.charactersIgnoringModifiers {
+                case "o":
+                    DispatchQueue.main.async { self?.toggleOverlay() }
+                    return nil
+                case "s":
+                    DispatchQueue.main.async { self?.toggleScroll() }
+                    return nil
+                case "r":
+                    DispatchQueue.main.async { self?.resetScroll() }
+                    return nil
+                case "]":
+                    DispatchQueue.main.async { self?.nextScript() }
+                    return nil
+                case "[":
+                    DispatchQueue.main.async { self?.previousScript() }
+                    return nil
+                default:
+                    break
+                }
+            }
+
+            // Ctrl+` (backtick) — creative toggle for overlay
+            if event.modifierFlags.contains(.control),
+               event.charactersIgnoringModifiers == "`" {
+                DispatchQueue.main.async { self?.toggleOverlay() }
+                return nil
+            }
+
+            // Ctrl+Space — toggle auto-scroll
+            if event.modifierFlags.contains(.control),
+               event.keyCode == 49 {
+                DispatchQueue.main.async { self?.toggleScroll() }
+                return nil
+            }
+
+            return event
+        }
+        if let monitor = localMonitor {
             globalMonitors.append(monitor)
         }
     }
@@ -181,7 +228,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleScroll() {
         switch scrollingController.mode {
         case .manual:
-            break
+            // Auto-switch to auto scroll mode when user triggers scroll
+            scrollingController.mode = .auto
+            scrollingController.startAutoScroll()
         case .auto:
             scrollingController.toggleAutoScroll()
         case .voice:

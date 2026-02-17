@@ -10,7 +10,7 @@ enum ScrollMode: String, CaseIterable {
 final class ScrollingController: ObservableObject {
     @Published var currentLineIndex: Int = 0
     @Published var scrollOffset: CGFloat = 0
-    @Published var mode: ScrollMode = .manual
+    @Published var mode: ScrollMode = .auto
     @Published var wordsPerMinute: Double = 150
     @Published var isScrolling: Bool = false
     @Published var isPausedByHover: Bool = false
@@ -33,10 +33,10 @@ final class ScrollingController: ObservableObject {
         60.0 / wordsPerMinute * 8.0
     }
 
-    func startAutoScroll() {
+    func startAutoScroll(skipCountdown: Bool = false) {
         guard mode == .auto || mode == .voice else { return }
 
-        if useCountdown && !isCountingDown && !isScrolling {
+        if !skipCountdown && useCountdown && !isCountingDown && !isScrolling {
             startCountdown()
             return
         }
@@ -63,7 +63,7 @@ final class ScrollingController: ObservableObject {
                     self.countdownTimer?.invalidate()
                     self.countdownTimer = nil
                     self.isCountingDown = false
-                    self.startAutoScroll()
+                    self.startAutoScroll(skipCountdown: true)
                 }
             }
         }

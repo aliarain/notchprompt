@@ -35,6 +35,8 @@ struct TeleprompterContentView: View {
                 titleFlashOverlay
             }
         }
+        .frame(width: 500, height: 200)
+        .clipped()
         .onAppear {
             scrollingController.setTotalLines(lines.count)
             installKeyMonitor()

@@ -185,10 +185,12 @@ struct SettingsView: View {
             }
 
             Section {
-                KeyboardShortcutRow(keys: "⌘O", description: "Toggle overlay")
+                KeyboardShortcutRow(keys: "⌃ `", description: "Toggle overlay")
+                KeyboardShortcutRow(keys: "⌃ Space", description: "Start / Stop scroll")
+                KeyboardShortcutRow(keys: "⌘O", description: "Toggle overlay (menu)")
                 KeyboardShortcutRow(keys: "⌘E", description: "Open script editor")
             } header: {
-                Text("Menu Bar")
+                Text("Quick Actions")
             }
 
             Section {
@@ -198,7 +200,7 @@ struct SettingsView: View {
                 KeyboardShortcutRow(keys: "⇧⌘]", description: "Next script")
                 KeyboardShortcutRow(keys: "⇧⌘[", description: "Previous script")
             } header: {
-                Text("Global Hotkeys")
+                Text("Global Hotkeys (needs Accessibility)")
             }
         }
         .formStyle(.grouped)
