@@ -1,14 +1,24 @@
 import SwiftUI
 
 struct AboutView: View {
+    @State private var logoScale: CGFloat = 0.8
+    @State private var logoOpacity: Double = 0
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // App Icon and Name
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Image(systemName: "text.alignleft")
                         .font(.system(size: 44, weight: .medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(Theme.accentGradient)
+                        .scaleEffect(logoScale)
+                        .opacity(logoOpacity)
+                        .onAppear {
+                            withAnimation(Theme.springAnimation) {
+                                logoScale = 1.0
+                                logoOpacity = 1.0
+                            }
+                        }
 
                     Text("NotchPrompt")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -19,9 +29,8 @@ struct AboutView: View {
                 }
                 .padding(.top, 16)
 
-                // Description
                 Text("A teleprompter hidden in your Mac's notch.\nInvisible during screen shares.")
-                    .font(.subheadline)
+                    .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -29,18 +38,16 @@ struct AboutView: View {
                 Divider()
                     .padding(.horizontal, 32)
 
-                // Creators
                 VStack(spacing: 20) {
                     Text("Built By")
-                        .font(.caption)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(.tertiary)
                         .textCase(.uppercase)
-                        .tracking(1)
+                        .tracking(1.5)
 
-                    // RaptrX
                     VStack(spacing: 8) {
                         Text("RaptrX")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
 
                         Text("Digital product studio building the future. From zero to Series A - lean products with just the right features for smooth performance and user love.")
                             .font(.caption)
@@ -51,8 +58,8 @@ struct AboutView: View {
 
                         Link(destination: URL(string: "https://raptrx.com")!) {
                             Text("raptrx.com")
-                                .font(.caption)
-                                .foregroundStyle(.blue)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Theme.accentPrimary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -60,10 +67,9 @@ struct AboutView: View {
                     Divider()
                         .frame(width: 100)
 
-                    // Ali Arain
                     VStack(spacing: 8) {
                         Text("Ali Arain")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
 
                         Text("Tech entrepreneur & full-stack developer from Pakistan. Founder of LiftUpAI. Building products, sharing lessons through podcasts, and exploring the intersection of AI and space.")
                             .font(.caption)
@@ -74,8 +80,8 @@ struct AboutView: View {
 
                         Link(destination: URL(string: "https://aliarain.com")!) {
                             Text("aliarain.com")
-                                .font(.caption)
-                                .foregroundStyle(.blue)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Theme.accentPrimary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -83,7 +89,6 @@ struct AboutView: View {
 
                 Spacer(minLength: 20)
 
-                // Footer
                 VStack(spacing: 6) {
                     Text("Made with passion in Pakistan")
                         .font(.caption2)

@@ -90,8 +90,11 @@ final class SpeechRecognitionManager: ObservableObject {
                     if self.wordTimestamps.count >= 2 {
                         let duration = now.timeIntervalSince(self.wordTimestamps.first!.time)
                         if duration > 0 {
-                            self.wordsPerMinute = Double(self.wordTimestamps.count) / duration * 60
-                            self.onSpeechDetected?(self.wordsPerMinute)
+                            let wpm = Double(self.wordTimestamps.count) / duration * 60
+                            DispatchQueue.main.async {
+                                self.wordsPerMinute = wpm
+                                self.onSpeechDetected?(wpm)
+                            }
                         }
                     }
                 }

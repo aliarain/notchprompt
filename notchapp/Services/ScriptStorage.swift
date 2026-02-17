@@ -8,8 +8,16 @@ final class ScriptStorage: ObservableObject {
     private let storageKey = "notchprompt.scripts"
     private let currentScriptKey = "notchprompt.currentScriptId"
 
+    private var saveSubject = PassthroughSubject<Void, Never>()
+    private var cancellables = Set<AnyCancellable>()
+
     init() {
         load()
+
+        saveSubject
+            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .sink { [weak self] in self?.persistToDisk() }
+            .store(in: &cancellables)
     }
 
     func load() {
@@ -24,16 +32,20 @@ final class ScriptStorage: ObservableObject {
         }
 
         if currentScript == nil && scripts.isEmpty {
-            let defaultScript = Script(title: "Welcome", content: "Welcome to NotchPrompt!\n\nPaste or type your script here.\n\nThis text will scroll smoothly while you present.")
+            let defaultScript = Script(title: "Welcome", content: "Welcome to NotchPrompt!\n\nPaste or type your script here.\n\nThis text will scroll smoothly while you present.\n\n[Smile]")
             scripts.append(defaultScript)
             currentScript = defaultScript
-            save()
+            persistToDisk()
         } else if currentScript == nil {
             currentScript = scripts.first
         }
     }
 
     func save() {
+        saveSubject.send()
+    }
+
+    private func persistToDisk() {
         if let encoded = try? JSONEncoder().encode(scripts) {
             UserDefaults.standard.set(encoded, forKey: storageKey)
         }
@@ -45,7 +57,7 @@ final class ScriptStorage: ObservableObject {
     func create(_ script: Script) {
         scripts.append(script)
         currentScript = script
-        save()
+        persistToDisk()
     }
 
     func update(_ script: Script) {
@@ -63,11 +75,27 @@ final class ScriptStorage: ObservableObject {
         if currentScript?.id == script.id {
             currentScript = scripts.first
         }
-        save()
+        persistToDisk()
     }
 
     func select(_ script: Script) {
         currentScript = script
-        save()
+        persistToDisk()
+    }
+
+    func selectNext() {
+        guard scripts.count > 1, let current = currentScript,
+              let idx = scripts.firstIndex(where: { $0.id == current.id }) else { return }
+        let next = (idx + 1) % scripts.count
+        currentScript = scripts[next]
+        persistToDisk()
+    }
+
+    func selectPrevious() {
+        guard scripts.count > 1, let current = currentScript,
+              let idx = scripts.firstIndex(where: { $0.id == current.id }) else { return }
+        let prev = idx == 0 ? scripts.count - 1 : idx - 1
+        currentScript = scripts[prev]
+        persistToDisk()
     }
 }
