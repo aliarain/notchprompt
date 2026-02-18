@@ -1,0 +1,50 @@
+# Xcode
+#
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Playgrounds
+#
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift Package Manager
+#
+.build/
+.swiftpm/
+
+# User-specific Xcode settings
+#
+xcuserdata/
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+
+# OS X
+#
+.DS_Store
+*.swp
+*~
+.AppleDouble
+.LSOverride
+Icon
+
+
+# Files that might contain sensitive information
+#
+*.env
+*.secret
+
+# Project specifics
+NotchPrompt-*.dmg
+dist/
+prd.txt
+spec.txt
+prd/
