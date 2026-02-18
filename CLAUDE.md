@@ -10,19 +10,19 @@ NotchPrompt is a macOS menu bar teleprompter app. The overlay displays scripts b
 
 ```bash
 # Build project
-xcodebuild -project notchapp.xcodeproj -scheme notchapp -configuration Debug build
+xcodebuild -project NotchPrompt.xcodeproj -scheme NotchPrompt -configuration Debug build
 
 # Build for release
-xcodebuild -project notchapp.xcodeproj -scheme notchapp -configuration Release build
+xcodebuild -project NotchPrompt.xcodeproj -scheme NotchPrompt -configuration Release build
 
 # Clean build
-xcodebuild -project notchapp.xcodeproj -scheme notchapp clean
+xcodebuild -project NotchPrompt.xcodeproj -scheme NotchPrompt clean
 
 # Run tests
-xcodebuild -project notchapp.xcodeproj -scheme notchapp test
+xcodebuild -project NotchPrompt.xcodeproj -scheme NotchPrompt test
 
 # Open in Xcode
-open notchapp.xcodeproj
+open NotchPrompt.xcodeproj
 ```
 
 ## Architecture
@@ -37,7 +37,7 @@ Menu Bar Icon (NSStatusItem)
 └─────────────────────────────┘
     ↓
 ┌─────────────────────────────┐
-│ NotchContentView            │
+│ TeleprompterContentView     │
 │ - Script text display       │
 │ - Scroll controls on hover  │
 │ - Close button on hover     │
@@ -54,13 +54,13 @@ Menu Bar Icon (NSStatusItem)
 ### File Structure
 
 ```text
-notchapp/
+NotchPrompt/
 ├── App/
 │   ├── NotchPromptApp.swift       # @main entry point
 │   └── AppDelegate.swift          # Menu bar + overlay management (@MainActor)
 ├── Views/
 │   ├── OverlayPanelController.swift  # DynamicNotchKit integration
-│   ├── OverlayContentView.swift      # NotchContentView with hover controls
+│   ├── OverlayContentView.swift      # TeleprompterContentView with hover controls
 │   ├── ScriptEditorView.swift        # Script list + text editor
 │   └── SettingsView.swift            # Appearance + scrolling settings
 ├── Core/
@@ -88,7 +88,7 @@ let notch = DynamicNotch(
     hoverBehavior: [.keepVisible, .hapticFeedback],
     style: .auto
 ) {
-    NotchContentView(...)
+    TeleprompterContentView(...)
 }
 await notch.expand()  // Shows from Mac notch
 await notch.hide()    // Hides with animation

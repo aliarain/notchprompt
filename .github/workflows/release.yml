@@ -1,0 +1,57 @@
+name: Build and Release NotchPrompt
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Package
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.0'
+
+      - name: Build App
+        run: |
+          xcodebuild -project NotchPrompt.xcodeproj \
+                     -scheme NotchPrompt \
+                     -configuration Release \
+                     -derivedDataPath build \
+                     build
+
+      - name: Prepare DMG
+        run: |
+          # Install create-dmg
+          brew install create-dmg
+          
+          mkdir -p dist
+          APP_NAME="NotchPrompt"
+          APP_PATH="build/Build/Products/Release/$APP_NAME.app"
+          
+          create-dmg \
+            --volname "$APP_NAME" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "$APP_NAME.app" 200 190 \
+            --hide-extension "$APP_NAME.app" \
+            --app-drop-link 600 185 \
+            "dist/${APP_NAME}_${{ github.ref_name }}.dmg" \
+            "$APP_PATH"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
