@@ -163,7 +163,7 @@ struct SettingsView: View {
                 Button("Reset Scroll Settings") {
                     withAnimation(Theme.springAnimation) {
                         scrollingController.wordsPerMinute = 150
-                        scrollingController.mode = .manual
+                        scrollingController.mode = .auto
                         scrollingController.useCountdown = true
                     }
                 }
@@ -207,6 +207,10 @@ struct SettingsView: View {
         .padding()
     }
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
     private var aboutTab: some View {
         VStack(spacing: 20) {
             Spacer()
@@ -219,7 +223,7 @@ struct SettingsView: View {
                 Text("NotchPrompt")
                     .font(.system(size: 20, weight: .bold, design: .rounded))
 
-                Text("Version 1.0.0")
+                Text("Version \(appVersion)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -233,22 +237,34 @@ struct SettingsView: View {
             Divider()
                 .frame(width: 120)
 
-            VStack(spacing: 4) {
+            VStack(spacing: 8) {
                 Text("Built by")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
                     .tracking(1.5)
 
-                Text("RaptrX")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                HStack(spacing: 20) {
+                    VStack(spacing: 4) {
+                        Text("RaptrX")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        Link("raptrx.com", destination: URL(string: "https://raptrx.com")!)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.accentPrimary)
+                            .buttonStyle(.plain)
+                    }
 
-                Link(destination: URL(string: "https://raptrx.com")!) {
-                    Text("raptrx.com")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.accentPrimary)
+                    Divider().frame(height: 30)
+
+                    VStack(spacing: 4) {
+                        Text("Ali Arain")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        Link("aliarain.com", destination: URL(string: "https://aliarain.com")!)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.accentPrimary)
+                            .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
 
             Spacer()

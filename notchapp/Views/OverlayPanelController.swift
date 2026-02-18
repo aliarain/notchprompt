@@ -20,7 +20,6 @@ final class OverlayPanelController {
     }
 
     func show() {
-        // Always recreate to ensure fresh state
         createNotch()
 
         Task {
@@ -40,9 +39,15 @@ final class OverlayPanelController {
     }
 
     func hide() {
+        // Stop scrolling immediately
+        scrollingController.stopAutoScroll()
+
+        // Mark as hidden right away so UI responds instantly
+        isExpanded = false
+
+        // Then animate the notch closed
         Task {
             await notch?.hide()
-            isExpanded = false
             notch = nil
         }
     }
@@ -56,7 +61,6 @@ final class OverlayPanelController {
     }
 
     private func createNotch() {
-        // Capture values to avoid self reference in ViewBuilder
         let storage = scriptStorage
         let controller = scrollingController
 
