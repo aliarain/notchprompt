@@ -2,8 +2,8 @@ import SwiftUI
 
 enum Theme {
     // MARK: - Programmatic Colors
-    static let accentPrimary = Color(red: 0.36, green: 0.36, blue: 0.90)
-    static let accentSecondary = Color(red: 0.58, green: 0.39, blue: 0.92)
+    static let accentPrimary = Color(hex: "DAFFAA")
+    static let accentSecondary = Color(hex: "DAFFAA").opacity(0.8)
 
     static let accentGradient = LinearGradient(
         colors: [accentPrimary, accentSecondary],
@@ -30,7 +30,7 @@ enum Theme {
     static let cuePause = Color(red: 1.0, green: 0.58, blue: 0.0)
     static let cueSmile = Color(red: 0.20, green: 0.78, blue: 0.35)
     static let cueCTA = Color(red: 1.0, green: 0.23, blue: 0.19)
-    static let cueSection = Color(red: 0.37, green: 0.36, blue: 0.90)
+    static let cueSection = Color(hex: "DAFFAA")
 
     // MARK: - Animations
     static let springAnimation = Animation.spring(response: 0.35, dampingFraction: 0.75)
