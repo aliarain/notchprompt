@@ -1,36 +1,71 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ScriptEditorView: View {
     @ObservedObject var storage: ScriptStorage
-    @State private var editingContent: String = ""
     @State private var editingTitle: String = ""
     @State private var showTemplatePicker = false
     @State private var hoveredScriptId: UUID?
+    @State private var currentPageIndex: Int = 0
+    @State private var isDroppingPPTX = false
+    @State private var dropError: String?
+
+    private var currentPageContent: Binding<String> {
+        Binding(
+            get: {
+                guard let script = storage.currentScript,
+                      currentPageIndex < script.pages.count else { return "" }
+                return script.pages[currentPageIndex]
+            },
+            set: { newValue in
+                guard var script = storage.currentScript,
+                      currentPageIndex < script.pages.count else { return }
+                script.pages[currentPageIndex] = newValue
+                storage.update(script)
+            }
+        )
+    }
 
     var body: some View {
         HSplitView {
-            sidebar
-            editor
+            scriptSidebar
+            HSplitView {
+                pageSidebar
+                editor
+            }
         }
-        .frame(minWidth: 600, minHeight: 450)
+        .frame(minWidth: 700, minHeight: 480)
         .onAppear {
             if let script = storage.currentScript {
-                editingContent = script.content
                 editingTitle = script.title
+                currentPageIndex = 0
+            }
+        }
+        .onChange(of: storage.currentScript?.id) { _, _ in
+            if let script = storage.currentScript {
+                editingTitle = script.title
+                currentPageIndex = 0
             }
         }
         .sheet(isPresented: $showTemplatePicker) {
             TemplatePickerView { template in
                 let script = template.script
                 storage.create(script)
-                editingContent = script.content
                 editingTitle = script.title
+                currentPageIndex = 0
                 showTemplatePicker = false
             }
         }
+        .alert("Import Error", isPresented: Binding(get: { dropError != nil }, set: { if !$0 { dropError = nil } })) {
+            Button("OK") { dropError = nil }
+        } message: {
+            Text(dropError ?? "")
+        }
     }
 
-    private var sidebar: some View {
+    // MARK: - Script Sidebar (left)
+
+    private var scriptSidebar: some View {
         VStack(spacing: 0) {
             List(storage.scripts, selection: Binding(
                 get: { storage.currentScript?.id },
@@ -38,14 +73,13 @@ struct ScriptEditorView: View {
                     if let id, let script = storage.scripts.first(where: { $0.id == id }) {
                         storage.select(script)
                         withAnimation(Theme.smoothEase) {
-                            editingContent = script.content
                             editingTitle = script.title
+                            currentPageIndex = 0
                         }
                     }
                 }
             )) { script in
                 let isActive = storage.currentScript?.id == script.id
-
                 HStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(isActive ? Theme.accentGradient : LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom))
@@ -59,6 +93,9 @@ struct ScriptEditorView: View {
 
                         HStack(spacing: 8) {
                             Text("\(script.wordCount) words")
+                            if script.pages.count > 1 {
+                                Text("\(script.pages.count) pages")
+                            }
                             Text(script.updatedAt, style: .relative)
                         }
                         .font(.system(size: 10))
@@ -72,16 +109,16 @@ struct ScriptEditorView: View {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(hoveredScriptId == script.id ? Color.white.opacity(0.05) : .clear)
                 )
-                .onHover { hovering in
-                    hoveredScriptId = hovering ? script.id : nil
-                }
+                .onHover { hovering in hoveredScriptId = hovering ? script.id : nil }
                 .contextMenu {
+                    Button("Export…") { storage.saveCurrentScript() }
+                    Divider()
                     Button("Delete", role: .destructive) {
                         withAnimation(Theme.springAnimation) {
                             storage.delete(script)
                             if let current = storage.currentScript {
-                                editingContent = current.content
                                 editingTitle = current.title
+                                currentPageIndex = 0
                             }
                         }
                     }
@@ -102,79 +139,173 @@ struct ScriptEditorView: View {
                     Label("Template", systemImage: "doc.text")
                 }
                 .buttonStyle(ScaleButtonStyle())
+
+                Button(action: { storage.openFile() }) {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(ScaleButtonStyle())
             }
             .font(.system(size: 12))
             .padding(10)
         }
-        .frame(minWidth: 180, maxWidth: 220)
+        .frame(minWidth: 160, maxWidth: 200)
     }
+
+    // MARK: - Page Sidebar (middle)
+
+    private var pageSidebar: some View {
+        VStack(spacing: 0) {
+            if let script = storage.currentScript, script.pages.count > 1 {
+                List(selection: Binding(
+                    get: { currentPageIndex },
+                    set: { if let idx = $0 { currentPageIndex = idx } }
+                )) {
+                    ForEach(Array(script.pages.enumerated()), id: \.offset) { index, page in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Page \(index + 1)")
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(currentPageIndex == index ? Theme.accentPrimary : .secondary)
+
+                            Text(pagePreview(page))
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(2)
+                        }
+                        .padding(.vertical, 2)
+                        .tag(index)
+                        .contextMenu {
+                            if script.pages.count > 1 {
+                                Button("Delete Page", role: .destructive) {
+                                    removePage(at: index)
+                                }
+                            }
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+
+                Divider()
+
+                Button(action: { addPage() }) {
+                    Label("Add Page", systemImage: "plus")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(minWidth: script_hasMultiplePages ? 120 : 0, maxWidth: script_hasMultiplePages ? 150 : 0)
+    }
+
+    private var script_hasMultiplePages: Bool {
+        (storage.currentScript?.pages.count ?? 1) > 1
+    }
+
+    // MARK: - Editor (right)
 
     private var editor: some View {
         VStack(spacing: 0) {
-            TextField("Script Title", text: $editingTitle)
-                .textFieldStyle(.plain)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-                .onChange(of: editingTitle) { _, _ in updateScript() }
+            // Title
+            HStack {
+                TextField("Script Title", text: $editingTitle)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .onChange(of: editingTitle) { _, _ in updateTitle() }
+
+                Spacer()
+
+                // Page indicator / add page button
+                if let script = storage.currentScript {
+                    if script.pages.count == 1 {
+                        Button(action: { addPage() }) {
+                            Label("Add Page", systemImage: "plus.rectangle.on.rectangle")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("Page \(currentPageIndex + 1) of \(script.pages.count)")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
 
             Divider()
 
-            if editingContent.isEmpty {
-                emptyState
-            } else {
-                TextEditor(text: $editingContent)
+            // Text editor with drop support
+            ZStack {
+                TextEditor(text: currentPageContent)
                     .font(.system(size: 15, design: .rounded))
                     .scrollContentBackground(.hidden)
                     .padding(16)
-                    .onChange(of: editingContent) { _, _ in updateScript() }
+
+                if isDroppingPPTX {
+                    dropZoneOverlay
+                }
+            }
+            .onDrop(of: [.fileURL], isTargeted: $isDroppingPPTX) { providers in
+                guard let provider = providers.first else { return false }
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    let ext = url.pathExtension.lowercased()
+                    guard ext == "pptx" else {
+                        DispatchQueue.main.async {
+                            self.dropError = "Only .pptx files are supported. For Keynote, export as PowerPoint first."
+                        }
+                        return
+                    }
+                    DispatchQueue.main.async {
+                        self.storage.importPPTX(from: url)
+                    }
+                }
+                return true
             }
 
             Divider()
-
             statsBar
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            Image(systemName: "text.cursor")
-                .font(.system(size: 40, weight: .thin))
-                .foregroundStyle(Theme.accentGradient)
-
-            Text("Start typing or paste your script")
-                .font(.system(size: 15, weight: .medium, design: .rounded))
-                .foregroundColor(.secondary)
-
-            Text("Use [Pause], [Smile], [CTA] for inline cues")
-                .font(.system(size: 12, design: .rounded))
-                .foregroundColor(.secondary.opacity(0.7))
-
-            Button("Or choose a template") {
-                showTemplatePicker = true
-            }
-            .buttonStyle(PillButtonStyle())
-            .padding(.top, 4)
-
-            Spacer()
+    private var dropZoneOverlay: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(Theme.accentPrimary)
+            Text("Drop PowerPoint (.pptx) to import slides as pages")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            editingContent = " "
-            editingContent = ""
-        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Theme.accentPrimary, style: StrokeStyle(lineWidth: 2, dash: [8]))
+                .background(Theme.accentPrimary.opacity(0.06).clipShape(RoundedRectangle(cornerRadius: 12)))
+        )
+        .padding(8)
     }
 
     private var statsBar: some View {
         HStack(spacing: 16) {
-            Label("\(wordCount) words", systemImage: "text.word.spacing")
-            Label("\(characterCount) chars", systemImage: "character.cursor.ibeam")
-            Spacer()
-            Label("~\(estimatedTime) min", systemImage: "clock")
-            Label("\(lineCount) lines", systemImage: "list.bullet")
+            if let script = storage.currentScript {
+                let page = currentPageIndex < script.pages.count ? script.pages[currentPageIndex] : ""
+                let wc = page.split(separator: " ").count
+                let cc = page.count
+                let lc = max(1, page.components(separatedBy: .newlines).filter { !$0.isEmpty }.count)
+                let est = max(1, wc / 150)
+
+                Label("\(wc) words", systemImage: "text.word.spacing")
+                Label("\(cc) chars", systemImage: "character.cursor.ibeam")
+                Spacer()
+                Label("~\(est) min", systemImage: "clock")
+                Label("\(lc) lines", systemImage: "list.bullet")
+            }
         }
         .font(.system(size: 11, design: .rounded))
         .foregroundColor(.secondary)
@@ -182,38 +313,55 @@ struct ScriptEditorView: View {
         .padding(.vertical, 8)
     }
 
-    private var wordCount: Int {
-        editingContent.split(separator: " ").count
+    // MARK: - Helpers
+
+    private func pagePreview(_ page: String) -> String {
+        let trimmed = page.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "Empty" }
+        let words = trimmed.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        let preview = words.prefix(6).joined(separator: " ")
+        return preview.count > 35 ? String(preview.prefix(35)) + "…" : preview
     }
 
-    private var characterCount: Int {
-        editingContent.count
-    }
-
-    private var lineCount: Int {
-        max(1, editingContent.components(separatedBy: .newlines).filter { !$0.isEmpty }.count)
-    }
-
-    private var estimatedTime: Int {
-        max(1, wordCount / 150)
-    }
-
-    private func updateScript() {
+    private func updateTitle() {
         guard var script = storage.currentScript else { return }
         script.title = editingTitle
-        script.updateContent(editingContent)
         storage.update(script)
+    }
+
+    private func addPage() {
+        guard var script = storage.currentScript else { return }
+        script.pages.append("")
+        storage.update(script)
+        withAnimation(Theme.smoothEase) {
+            currentPageIndex = script.pages.count - 1
+        }
+    }
+
+    private func removePage(at index: Int) {
+        guard var script = storage.currentScript, script.pages.count > 1 else { return }
+        script.pages.remove(at: index)
+        storage.update(script)
+        withAnimation(Theme.smoothEase) {
+            if currentPageIndex >= script.pages.count {
+                currentPageIndex = script.pages.count - 1
+            } else if currentPageIndex > index {
+                currentPageIndex -= 1
+            }
+        }
     }
 
     private func createBlankScript() {
         let script = Script(title: "New Script", content: "")
         storage.create(script)
         withAnimation(Theme.smoothEase) {
-            editingContent = ""
             editingTitle = "New Script"
+            currentPageIndex = 0
         }
     }
 }
+
+// MARK: - Template Picker
 
 struct TemplatePickerView: View {
     var onSelect: (ScriptTemplate) -> Void

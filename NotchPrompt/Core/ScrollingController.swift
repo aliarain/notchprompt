@@ -1,5 +1,8 @@
 import Foundation
 import Combine
+import AppKit
+
+// MARK: - Scroll / Listening Mode
 
 enum ScrollMode: String, CaseIterable {
     case manual = "Manual"
@@ -7,11 +10,121 @@ enum ScrollMode: String, CaseIterable {
     case voice = "Voice"
 }
 
+/// How the teleprompter tracks your speech
+enum ListeningMode: String, CaseIterable, Identifiable {
+    case wordTracking  = "Word Tracking"
+    case classic       = "Classic"
+    case silencePaused = "Voice-Activated"
+
+    var id: String { rawValue }
+
+    var description: String {
+        switch self {
+        case .wordTracking:  return "Tracks each word you say and highlights it in real time."
+        case .classic:       return "Auto-scrolls at a constant speed. No microphone needed."
+        case .silencePaused: return "Scrolls while you speak, pauses when you're silent."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .wordTracking:  return "text.word.spacing"
+        case .classic:       return "arrow.down.circle"
+        case .silencePaused: return "waveform.circle"
+        }
+    }
+}
+
+// MARK: - Font Family Preset
+
+enum FontFamilyPreset: String, CaseIterable, Identifiable {
+    case sans     = "Sans"
+    case serif    = "Serif"
+    case mono     = "Mono"
+    case dyslexia = "Dyslexia"
+
+    var id: String { rawValue }
+
+    func font(size: CGFloat, weight: NSFont.Weight = .semibold) -> NSFont {
+        let base = NSFont.systemFont(ofSize: size, weight: weight)
+        let descriptor = base.fontDescriptor
+        switch self {
+        case .sans:
+            return base
+        case .serif:
+            if let designed = descriptor.withDesign(.serif) {
+                return NSFont(descriptor: designed, size: size) ?? base
+            }
+            return base
+        case .mono:
+            if let designed = descriptor.withDesign(.monospaced) {
+                return NSFont(descriptor: designed, size: size) ?? base
+            }
+            return NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+        case .dyslexia:
+            if let dyslexicFont = NSFont(name: "OpenDyslexic3", size: size) {
+                return dyslexicFont
+            }
+            if let designed = descriptor.withDesign(.rounded) {
+                return NSFont(descriptor: designed, size: size) ?? base
+            }
+            return base
+        }
+    }
+}
+
+// MARK: - Font Size Preset
+
+enum FontSizePreset: String, CaseIterable, Identifiable {
+    case xs = "XS"
+    case sm = "SM"
+    case lg = "LG"
+    case xl = "XL"
+
+    var id: String { rawValue }
+
+    var pointSize: CGFloat {
+        switch self {
+        case .xs: return 14
+        case .sm: return 16
+        case .lg: return 20
+        case .xl: return 24
+        }
+    }
+}
+
+// MARK: - Overlay Mode
+
+enum OverlayDisplayMode: String, CaseIterable, Identifiable {
+    case notch      = "Notch"
+    case floating   = "Floating"
+    case fullscreen = "Fullscreen"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .notch:      return "rectangle.topthird.inset.filled"
+        case .floating:   return "macwindow.on.rectangle"
+        case .fullscreen: return "rectangle.fill"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .notch:      return "Anchored below the notch at the top of your screen."
+        case .floating:   return "A draggable window you can place anywhere."
+        case .fullscreen: return "Fullscreen teleprompter on the selected display."
+        }
+    }
+}
+
+// MARK: - Scrolling Controller
+
 final class ScrollingController: ObservableObject {
+    // Scroll state
     @Published var currentLineIndex: Int = 0
     @Published var scrollOffset: CGFloat = 0
-    @Published var mode: ScrollMode = .auto
-    @Published var wordsPerMinute: Double = 150
     @Published var isScrolling: Bool = false
     @Published var isPausedByHover: Bool = false
     @Published var isCountingDown: Bool = false
@@ -19,11 +132,32 @@ final class ScrollingController: ObservableObject {
     @Published var totalLines: Int = 0
     @Published var progress: Double = 0
 
+    // Settings
+    @Published var mode: ScrollMode = .auto
+    @Published var listeningMode: ListeningMode = .wordTracking
+    @Published var wordsPerMinute: Double = 150
+    @Published var useCountdown: Bool = true
+
+    // Font settings
+    @Published var fontFamilyPreset: FontFamilyPreset = .sans
+    @Published var fontSizePreset: FontSizePreset = .lg
+
+    // Overlay mode
+    @Published var overlayDisplayMode: OverlayDisplayMode = .notch
+
+    // Word tracking (for word-level highlight mode)
+    @Published var recognizedCharCount: Int = 0
+
+    // Timer-based scroll progress (for classic / silence-paused)
+    @Published var timerWordProgress: Double = 0
+
+    // Multi-page
+    @Published var currentPageIndex: Int = 0
+    @Published var totalPages: Int = 1
+
     private var autoScrollTimer: Timer?
     private var countdownTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
-
-    @Published var useCountdown: Bool = true
 
     var scrollSpeed: CGFloat {
         CGFloat(wordsPerMinute) / 60.0 * 20.0
@@ -31,6 +165,11 @@ final class ScrollingController: ObservableObject {
 
     var lineAdvanceInterval: TimeInterval {
         60.0 / wordsPerMinute * 8.0
+    }
+
+    // Words per second for timer-based modes
+    var wordsPerSecond: Double {
+        wordsPerMinute / 60.0
     }
 
     func startAutoScroll(skipCountdown: Bool = false) {
@@ -124,6 +263,8 @@ final class ScrollingController: ObservableObject {
         currentLineIndex = 0
         progress = 0
         isPausedByHover = false
+        recognizedCharCount = 0
+        timerWordProgress = 0
     }
 
     func setOffset(_ offset: CGFloat) {

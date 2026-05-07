@@ -3,20 +3,45 @@ import Foundation
 struct Script: Identifiable, Codable, Hashable {
     let id: UUID
     var title: String
-    var content: String
+    var pages: [String]          // multi-page support
     var createdAt: Date
     var updatedAt: Date
 
+    // Legacy single-content init
     init(id: UUID = UUID(), title: String = "Untitled", content: String = "") {
         self.id = id
         self.title = title
-        self.content = content
+        self.pages = [content]
         self.createdAt = Date()
         self.updatedAt = Date()
     }
 
+    init(id: UUID = UUID(), title: String = "Untitled", pages: [String]) {
+        self.id = id
+        self.title = title
+        self.pages = pages.isEmpty ? [""] : pages
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    // Backward-compat: treat first page as "content"
+    var content: String {
+        get { pages.first ?? "" }
+        set {
+            if pages.isEmpty { pages = [newValue] }
+            else { pages[0] = newValue }
+        }
+    }
+
     mutating func updateContent(_ newContent: String) {
-        content = newContent
+        if pages.isEmpty { pages = [newContent] }
+        else { pages[0] = newContent }
+        updatedAt = Date()
+    }
+
+    mutating func updatePage(_ index: Int, content: String) {
+        guard index >= 0 && index < pages.count else { return }
+        pages[index] = content
         updatedAt = Date()
     }
 
@@ -25,13 +50,55 @@ struct Script: Identifiable, Codable, Hashable {
     }
 
     var wordCount: Int {
-        content.split(separator: " ").count
+        pages.joined(separator: " ").split(separator: " ").count
     }
 
     func estimatedMinutes(at wpm: Double = 150) -> Int {
         max(1, Int(ceil(Double(wordCount) / wpm)))
     }
 }
+
+// MARK: - CJK-aware word splitting (ported from Textream)
+
+extension Unicode.Scalar {
+    var isCJK: Bool {
+        let v = value
+        return (v >= 0x4E00 && v <= 0x9FFF)
+            || (v >= 0x3400 && v <= 0x4DBF)
+            || (v >= 0x20000 && v <= 0x2A6DF)
+            || (v >= 0xF900 && v <= 0xFAFF)
+            || (v >= 0x3040 && v <= 0x309F)
+            || (v >= 0x30A0 && v <= 0x30FF)
+            || (v >= 0xAC00 && v <= 0xD7AF)
+    }
+}
+
+func splitTextIntoWords(_ text: String) -> [String] {
+    let tokens = text.replacingOccurrences(of: "\n", with: " ")
+        .split(omittingEmptySubsequences: true, whereSeparator: { $0.isWhitespace })
+        .map { String($0) }
+
+    var result: [String] = []
+    for token in tokens {
+        guard token.unicodeScalars.contains(where: { $0.isCJK }) else {
+            result.append(token)
+            continue
+        }
+        var buffer = ""
+        for char in token {
+            if char.unicodeScalars.first.map({ $0.isCJK }) == true {
+                if !buffer.isEmpty { result.append(buffer); buffer = "" }
+                result.append(String(char))
+            } else {
+                buffer.append(char)
+            }
+        }
+        if !buffer.isEmpty { result.append(buffer) }
+    }
+    return result
+}
+
+// MARK: - Script Templates
 
 enum ScriptTemplate: String, CaseIterable, Identifiable {
     case blank = "Blank"
@@ -135,6 +202,8 @@ enum ScriptTemplate: String, CaseIterable, Identifiable {
         }
     }
 }
+
+// MARK: - Cue Type
 
 enum CueType {
     case pause

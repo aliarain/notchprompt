@@ -7,16 +7,18 @@ final class OverlayPanelController {
     private var notch: DynamicNotch<TeleprompterContentView, EmptyView, EmptyView>?
     private let scriptStorage: ScriptStorage
     private let scrollingController: ScrollingController
+    private let speechManager: SpeechRecognitionManager
 
     private var isExpanded = false
 
-    var isVisible: Bool {
-        isExpanded
-    }
+    var isVisible: Bool { isExpanded }
 
-    init(scriptStorage: ScriptStorage, scrollingController: ScrollingController) {
+    init(scriptStorage: ScriptStorage,
+         scrollingController: ScrollingController,
+         speechManager: SpeechRecognitionManager) {
         self.scriptStorage = scriptStorage
         self.scrollingController = scrollingController
+        self.speechManager = speechManager
     }
 
     func show() {
@@ -27,7 +29,7 @@ final class OverlayPanelController {
             await notch.expand()
             isExpanded = true
 
-            // Set sharingType = .none for screen share invisibility
+            // Make overlay invisible in screen shares
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 for window in NSApp.windows {
                     if window.level == .screenSaver, let panel = window as? NSPanel {
@@ -39,13 +41,10 @@ final class OverlayPanelController {
     }
 
     func hide() {
-        // Stop scrolling immediately
+        speechManager.forceStop()
         scrollingController.stopAutoScroll()
-
-        // Mark as hidden right away so UI responds instantly
         isExpanded = false
 
-        // Then animate the notch closed
         Task {
             await notch?.hide()
             notch = nil
@@ -53,16 +52,13 @@ final class OverlayPanelController {
     }
 
     func toggle() {
-        if isExpanded {
-            hide()
-        } else {
-            show()
-        }
+        if isExpanded { hide() } else { show() }
     }
 
     private func createNotch() {
         let storage = scriptStorage
         let controller = scrollingController
+        let speech = speechManager
 
         notch = DynamicNotch(
             hoverBehavior: [.keepVisible, .hapticFeedback],
@@ -71,6 +67,7 @@ final class OverlayPanelController {
             TeleprompterContentView(
                 scriptStorage: storage,
                 scrollingController: controller,
+                speechManager: speech,
                 onClose: { [weak self] in
                     self?.hide()
                 }

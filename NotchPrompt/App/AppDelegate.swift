@@ -28,7 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         globalMonitors.forEach { NSEvent.removeMonitor($0) }
         globalMonitors.removeAll()
         iconPulseTimer?.invalidate()
+        speechManager.forceStop()
     }
+
+    // MARK: - Setup
 
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -43,10 +46,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Edit Script", action: #selector(showEditor), keyEquivalent: "e"))
         menu.addItem(NSMenuItem.separator())
 
+        // Listening mode submenu
+        let listeningMenu = NSMenu()
+        let listeningItem = NSMenuItem(title: "Listening Mode", action: nil, keyEquivalent: "")
+        listeningItem.submenu = listeningMenu
+        for mode in ListeningMode.allCases {
+            let item = NSMenuItem(title: mode.rawValue, action: #selector(setListeningMode(_:)), keyEquivalent: "")
+            item.representedObject = mode
+            item.state = scrollingController.listeningMode == mode ? .on : .off
+            listeningMenu.addItem(item)
+        }
+        menu.addItem(listeningItem)
+
+        // Scroll mode submenu
         let scrollMenu = NSMenu()
         let scrollItem = NSMenuItem(title: "Scroll Mode", action: nil, keyEquivalent: "")
         scrollItem.submenu = scrollMenu
-
         for mode in ScrollMode.allCases {
             let item = NSMenuItem(title: mode.rawValue, action: #selector(setScrollMode(_:)), keyEquivalent: "")
             item.representedObject = mode
@@ -69,7 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupOverlay() {
         overlayController = OverlayPanelController(
             scriptStorage: scriptStorage,
-            scrollingController: scrollingController
+            scrollingController: scrollingController,
+            speechManager: speechManager
         )
     }
 
@@ -84,74 +100,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupGlobalHotkeys() {
-        // Global monitor: works when OTHER apps are focused
-        // NOTE: Requires Accessibility permission in System Preferences
         let globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.modifierFlags.contains([.command, .shift]) else { return }
             switch event.charactersIgnoringModifiers {
-            case "o":
-                DispatchQueue.main.async { self?.toggleOverlay() }
-            case "s":
-                DispatchQueue.main.async { self?.toggleScroll() }
-            case "r":
-                DispatchQueue.main.async { self?.resetScroll() }
-            case "]":
-                DispatchQueue.main.async { self?.nextScript() }
-            case "[":
-                DispatchQueue.main.async { self?.previousScript() }
-            default:
-                break
+            case "o": DispatchQueue.main.async { self?.toggleOverlay() }
+            case "s": DispatchQueue.main.async { self?.toggleScroll() }
+            case "r": DispatchQueue.main.async { self?.resetScroll() }
+            case "]": DispatchQueue.main.async { self?.nextScript() }
+            case "[": DispatchQueue.main.async { self?.previousScript() }
+            default: break
             }
         }
-        if let monitor = globalMonitor {
-            globalMonitors.append(monitor)
-        }
+        if let monitor = globalMonitor { globalMonitors.append(monitor) }
 
-        // Local monitor: works when THIS app is focused (no permissions needed)
         let localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            // Cmd+Shift shortcuts
             if event.modifierFlags.contains([.command, .shift]) {
                 switch event.charactersIgnoringModifiers {
-                case "o":
-                    DispatchQueue.main.async { self?.toggleOverlay() }
-                    return nil
-                case "s":
-                    DispatchQueue.main.async { self?.toggleScroll() }
-                    return nil
-                case "r":
-                    DispatchQueue.main.async { self?.resetScroll() }
-                    return nil
-                case "]":
-                    DispatchQueue.main.async { self?.nextScript() }
-                    return nil
-                case "[":
-                    DispatchQueue.main.async { self?.previousScript() }
-                    return nil
-                default:
-                    break
+                case "o": DispatchQueue.main.async { self?.toggleOverlay() }; return nil
+                case "s": DispatchQueue.main.async { self?.toggleScroll() }; return nil
+                case "r": DispatchQueue.main.async { self?.resetScroll() }; return nil
+                case "]": DispatchQueue.main.async { self?.nextScript() }; return nil
+                case "[": DispatchQueue.main.async { self?.previousScript() }; return nil
+                default: break
                 }
             }
-
-            // Ctrl+` (backtick) — creative toggle for overlay
-            if event.modifierFlags.contains(.control),
-               event.charactersIgnoringModifiers == "`" {
+            if event.modifierFlags.contains(.control), event.charactersIgnoringModifiers == "`" {
                 DispatchQueue.main.async { self?.toggleOverlay() }
                 return nil
             }
-
-            // Ctrl+Space — toggle auto-scroll
-            if event.modifierFlags.contains(.control),
-               event.keyCode == 49 {
+            if event.modifierFlags.contains(.control), event.keyCode == 49 {
                 DispatchQueue.main.async { self?.toggleScroll() }
                 return nil
             }
-
             return event
         }
-        if let monitor = localMonitor {
-            globalMonitors.append(monitor)
-        }
+        if let monitor = localMonitor { globalMonitors.append(monitor) }
     }
+
+    // MARK: - Icon Pulse
 
     func startIconPulse() {
         iconPulseTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
@@ -170,6 +156,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.button?.image = NSImage(systemSymbolName: "text.alignleft", accessibilityDescription: "NotchPrompt")
     }
 
+    // MARK: - Actions
+
     @objc private func toggleOverlay() {
         overlayController?.toggle()
     }
@@ -183,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let editorView = ScriptEditorView(storage: scriptStorage)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 550),
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -195,6 +183,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         editorWindow = window
+    }
+
+    @objc private func setListeningMode(_ sender: NSMenuItem) {
+        guard let mode = sender.representedObject as? ListeningMode else { return }
+        scrollingController.listeningMode = mode
+        updateListeningModeMenu()
+
+        // Handle voice icon pulse for voice-activated modes
+        if mode == .silencePaused || mode == .wordTracking {
+            startIconPulse()
+        } else {
+            stopIconPulse()
+        }
+    }
+
+    private func updateListeningModeMenu() {
+        guard let menu = statusItem?.menu,
+              let listeningItem = menu.items.first(where: { $0.title == "Listening Mode" }),
+              let listeningMenu = listeningItem.submenu else { return }
+        for item in listeningMenu.items {
+            if let mode = item.representedObject as? ListeningMode {
+                item.state = scrollingController.listeningMode == mode ? .on : .off
+            }
+        }
     }
 
     @objc private func setScrollMode(_ sender: NSMenuItem) {
@@ -217,7 +229,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let menu = statusItem?.menu,
               let scrollItem = menu.items.first(where: { $0.title == "Scroll Mode" }),
               let scrollMenu = scrollItem.submenu else { return }
-
         for item in scrollMenu.items {
             if let mode = item.representedObject as? ScrollMode {
                 item.state = scrollingController.mode == mode ? .on : .off
@@ -228,7 +239,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleScroll() {
         switch scrollingController.mode {
         case .manual:
-            // Auto-switch to auto scroll mode when user triggers scroll
             scrollingController.mode = .auto
             scrollingController.startAutoScroll()
         case .auto:
@@ -266,7 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settingsView = SettingsView(scrollingController: scrollingController)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 480),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
