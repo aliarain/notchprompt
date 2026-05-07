@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage("overlay.autoNextPageDelay") private var autoNextPageDelay: Int = 3
     @AppStorage("overlay.useTransparency") private var useTransparency: Bool = false
     @AppStorage("overlay.transparencyOpacity") private var transparencyOpacity: Double = 0.85
+    @AppStorage("overlay.followMouse") private var followMouse: Bool = true
 
     // Available input devices for mic picker
     @State private var inputDevices: [AudioInputDevice] = []
@@ -504,10 +505,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle(isOn: Binding(
-                    get: { UserDefaults.standard.bool(forKey: "overlay.followMouse") == false ? false : true },
-                    set: { UserDefaults.standard.set($0, forKey: "overlay.followMouse") }
-                )) {
+                Toggle(isOn: $followMouse) {
                     Label("Follow Mouse (Multi-Display)", systemImage: "display.2")
                 }
 

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App identity -->
+	<key>CFBundleName</key>
+	<string>NotchPrompt</string>
+	<key>CFBundleDisplayName</key>
+	<string>NotchPrompt</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+
+	<!-- Menu bar app — no dock icon -->
+	<key>LSUIElement</key>
+	<true/>
+
+	<!-- Minimum OS -->
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+
+	<!-- Privacy usage descriptions -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>NotchPrompt uses the microphone to follow your speech and highlight words in real time.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>NotchPrompt uses speech recognition to track which word you're reading and scroll your script automatically.</string>
+
+	<!-- URL scheme: notchprompt://read?text=... -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.raptrx.NotchPrompt</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>notchprompt</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- macOS Services: right-click any text → Read in NotchPrompt -->
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Read in NotchPrompt</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>readInNotchPrompt:userData:error:</string>
+			<key>NSSendTypes</key>
+			<array>
+				<string>NSStringPboardType</string>
+			</array>
+			<key>NSPortName</key>
+			<string>NotchPrompt</string>
+		</dict>
+	</array>
+
+	<!-- Document types: .notchprompt files -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>NotchPrompt Script</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>notchprompt</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+		</dict>
+	</array>
+
+	<!-- Copyright -->
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 RaptrX. All rights reserved.</string>
+</dict>
+</plist>

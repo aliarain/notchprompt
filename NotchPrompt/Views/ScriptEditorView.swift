@@ -13,6 +13,9 @@ struct ScriptEditorView: View {
     // Feature 19: Dictation
     @State private var isDictating: Bool = false
     @StateObject private var dictation = DictationManager()
+    // Track where the current dictation segment started in the page text
+    @State private var dictationSegmentStart: Int = 0
+    @State private var dictationSegmentLength: Int = 0
 
     private var currentPageContent: Binding<String> {
         Binding(
@@ -285,11 +288,6 @@ struct ScriptEditorView: View {
                     }
                 }
             }
-            .onAppear {
-                dictation.onTextUpdate = { [self] text in
-                    appendDictatedText(text)
-                }
-            }
             .onDrop(of: [.fileURL], isTargeted: $isDroppingPPTX) { providers in
                 guard let provider = providers.first else { return false }
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -413,22 +411,54 @@ struct ScriptEditorView: View {
         if isDictating {
             dictation.stop()
             isDictating = false
+            dictationSegmentStart = 0
+            dictationSegmentLength = 0
         } else {
+            // Record where in the text we're starting this segment
+            let currentText = storage.currentScript.flatMap {
+                $0.pages.indices.contains(currentPageIndex) ? $0.pages[currentPageIndex] : nil
+            } ?? ""
+            let needsSeparator = !currentText.isEmpty && !currentText.hasSuffix("\n") && !currentText.hasSuffix(" ")
+            dictationSegmentStart = currentText.count + (needsSeparator ? 1 : 0)
+            dictationSegmentLength = 0
+
             dictation.onTextUpdate = { [self] text in
-                appendDictatedText(text)
+                replaceDictationSegment(with: text)
             }
             dictation.start()
             isDictating = true
         }
     }
 
-    private func appendDictatedText(_ text: String) {
+    /// Replace the current dictation segment (partial results overwrite each other)
+    private func replaceDictationSegment(with text: String) {
         guard var script = storage.currentScript,
               currentPageIndex < script.pages.count else { return }
-        let current = script.pages[currentPageIndex]
-        // Replace the last dictated segment or append
-        let separator = current.isEmpty ? "" : " "
-        script.pages[currentPageIndex] = current + separator + text
+
+        var page = script.pages[currentPageIndex]
+
+        // Remove the previous partial result for this segment
+        if dictationSegmentLength > 0 {
+            let removeStart = min(dictationSegmentStart, page.count)
+            let removeEnd = min(removeStart + dictationSegmentLength, page.count)
+            let startIdx = page.index(page.startIndex, offsetBy: removeStart)
+            let endIdx = page.index(page.startIndex, offsetBy: removeEnd)
+            page.removeSubrange(startIdx..<endIdx)
+        }
+
+        // Insert the new text at the segment start
+        let insertAt = min(dictationSegmentStart, page.count)
+        let insertIdx = page.index(page.startIndex, offsetBy: insertAt)
+
+        // Add separator if needed (only on first insertion)
+        let needsSeparator = dictationSegmentLength == 0 && insertAt > 0
+            && !page.isEmpty
+            && !page[page.index(before: insertIdx)].isWhitespace
+        let insertion = (needsSeparator ? " " : "") + text
+        page.insert(contentsOf: insertion, at: insertIdx)
+        dictationSegmentLength = insertion.count
+
+        script.pages[currentPageIndex] = page
         storage.update(script)
     }
 }
