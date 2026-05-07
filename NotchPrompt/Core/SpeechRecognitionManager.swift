@@ -2,6 +2,65 @@ import Foundation
 import Speech
 import AVFoundation
 import Combine
+import CoreAudio
+
+// MARK: - AudioInputDevice (Feature 11)
+
+struct AudioInputDevice: Identifiable, Hashable {
+    let id: AudioDeviceID
+    let uid: String
+    let name: String
+
+    static func allInputDevices() -> [AudioInputDevice] {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize) == noErr else { return [] }
+
+        let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: deviceCount)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize, &deviceIDs) == noErr else { return [] }
+
+        var result: [AudioInputDevice] = []
+        for deviceID in deviceIDs {
+            var inputAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreams,
+                mScope: kAudioDevicePropertyScopeInput,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var streamSize: UInt32 = 0
+            guard AudioObjectGetPropertyDataSize(deviceID, &inputAddress, 0, nil, &streamSize) == noErr, streamSize > 0 else { continue }
+
+            var uidAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceUID,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var uid: CFString = "" as CFString
+            var uidSize = UInt32(MemoryLayout<CFString>.size)
+            guard AudioObjectGetPropertyData(deviceID, &uidAddress, 0, nil, &uidSize, &uid) == noErr else { continue }
+
+            var nameAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceNameCFString,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            var name: CFString = "" as CFString
+            var nameSize = UInt32(MemoryLayout<CFString>.size)
+            guard AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, &name) == noErr else { continue }
+
+            result.append(AudioInputDevice(id: deviceID, uid: uid as String, name: name as String))
+        }
+        return result
+    }
+
+    static func deviceID(forUID uid: String) -> AudioDeviceID? {
+        allInputDevices().first(where: { $0.uid == uid })?.id
+    }
+}
 
 // MARK: - SpeechRecognitionManager
 // Upgraded with word-level tracking, silence detection, and fuzzy matching
@@ -84,8 +143,9 @@ final class SpeechRecognitionManager: ObservableObject {
             requestAuthorization { [weak self] in self?.startListening() }
             return
         }
+        let locale = UserDefaults.standard.string(forKey: "speech.locale") ?? "en-US"
         guard authorizationStatus == .authorized,
-              let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US")),
+              let recognizer = SFSpeechRecognizer(locale: Locale(identifier: locale)),
               recognizer.isAvailable else { return }
 
         stopListening()
@@ -240,8 +300,27 @@ final class SpeechRecognitionManager: ObservableObject {
         cleanupRecognition()
         audioEngine = AVAudioEngine()
 
-        speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        let locale = UserDefaults.standard.string(forKey: "speech.locale") ?? "en-US"
+        speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: locale))
         guard let speechRecognizer, speechRecognizer.isAvailable else { return }
+
+        // Apply selected microphone if configured (Feature 11)
+        let micUID = UserDefaults.standard.string(forKey: "speech.micUID") ?? ""
+        if !micUID.isEmpty, let deviceID = AudioInputDevice.deviceID(forUID: micUID) {
+            if let audioUnit = audioEngine.inputNode.audioUnit {
+                var devID = deviceID
+                AudioUnitSetProperty(
+                    audioUnit,
+                    kAudioOutputUnitProperty_CurrentDevice,
+                    kAudioUnitScope_Global,
+                    0,
+                    &devID,
+                    UInt32(MemoryLayout<AudioDeviceID>.size)
+                )
+                AudioUnitUninitialize(audioUnit)
+                AudioUnitInitialize(audioUnit)
+            }
+        }
 
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest else { return }

@@ -1,5 +1,32 @@
 import SwiftUI
 import Combine
+import AppKit
+
+// MARK: - NotchBlurView (NSVisualEffectView wrapper)
+
+struct NotchBlurView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
+// MARK: - ResizeCursorView
+
+struct ResizeCursorView: NSViewRepresentable {
+    func makeNSView(context: Context) -> ResizeCursorNSView { ResizeCursorNSView() }
+    func updateNSView(_ nsView: ResizeCursorNSView, context: Context) {}
+}
+
+class ResizeCursorNSView: NSView {
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .resizeUpDown)
+    }
+}
 
 // MARK: - Main Teleprompter Overlay
 
@@ -16,6 +43,23 @@ struct TeleprompterContentView: View {
     @State private var timerWordProgress: Double = 0
     @State private var isUserScrolling: Bool = false
     @State private var isPaused: Bool = false
+
+    // Auto-next page
+    @AppStorage("overlay.autoNextPage") private var autoNextPage: Bool = false
+    @AppStorage("overlay.autoNextPageDelay") private var autoNextPageDelay: Int = 3
+    @State private var autoNextCountdown: Int = 0
+    @State private var autoNextTimer: Timer? = nil
+
+    // Page picker
+    @State private var showPagePicker: Bool = false
+
+    // Resizable height
+    @State private var extraHeight: CGFloat = 0
+    @State private var isDragHandleHovering: Bool = false
+
+    // Transparency
+    @AppStorage("overlay.useTransparency") private var useTransparency: Bool = false
+    @AppStorage("overlay.transparencyOpacity") private var transparencyOpacity: Double = 0.85
 
     private let scrollTimer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
@@ -79,8 +123,21 @@ struct TeleprompterContentView: View {
         scrollingController.fontFamilyPreset.font(size: scrollingController.fontSizePreset.pointSize)
     }
 
+    // Cue color from controller
+    private var cueColor: Color {
+        Color(hex: scrollingController.cueColorHex)
+    }
+
     var body: some View {
         ZStack {
+            // Transparency background
+            if useTransparency {
+                ZStack {
+                    NotchBlurView()
+                    Color.black.opacity(1.0 - transparencyOpacity)
+                }
+            }
+
             if scrollingController.isCountingDown {
                 CountdownView(value: scrollingController.countdownValue)
                     .transition(.scale.combined(with: .opacity))
@@ -101,6 +158,7 @@ struct TeleprompterContentView: View {
                     }
 
                     scriptContent
+                    dragHandle
                     progressBar
                     controlBar
                 }
@@ -109,8 +167,13 @@ struct TeleprompterContentView: View {
             if showTitleFlash {
                 titleFlashOverlay
             }
+
+            // Page picker overlay
+            if showPagePicker {
+                pagePickerOverlay
+            }
         }
-        .frame(width: 500, height: 200)
+        .frame(width: 500, height: 200 + extraHeight)
         .clipped()
         .onAppear {
             scrollingController.setTotalLines(words.count)
@@ -120,6 +183,7 @@ struct TeleprompterContentView: View {
         .onDisappear {
             removeKeyMonitor()
             speechManager.forceStop()
+            stopAutoNextTimer()
         }
         .onChange(of: scriptStorage.currentScript?.id) { _, _ in
             resetForNewScript()
@@ -150,6 +214,11 @@ struct TeleprompterContentView: View {
                 break
             }
         }
+        .onChange(of: isDone) { _, done in
+            if done && hasNextPage && autoNextPage {
+                startAutoNextTimer()
+            }
+        }
         .animation(Theme.springAnimation, value: scrollingController.isCountingDown)
         .animation(Theme.springAnimation, value: isDone)
     }
@@ -162,9 +231,9 @@ struct TeleprompterContentView: View {
             highlightedCharCount: effectiveCharCount,
             font: overlayFont,
             highlightColor: Color(hex: textColorHex),
-            cueColor: Theme.accentPrimary,
-            cueUnreadOpacity: 0.25,
-            cueReadOpacity: 0.55,
+            cueColor: cueColor,
+            cueUnreadOpacity: scrollingController.cueBrightness.unreadOpacity,
+            cueReadOpacity: scrollingController.cueBrightness.readOpacity,
             onWordTap: { charOffset in
                 switch listeningMode {
                 case .wordTracking:
@@ -197,6 +266,33 @@ struct TeleprompterContentView: View {
             offset = end + 1
         }
         return Double(words.count)
+    }
+
+    // MARK: - Drag Handle
+
+    private var dragHandle: some View {
+        ZStack {
+            if isDragHandleHovering {
+                ResizeCursorView()
+                    .frame(height: 16)
+            }
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.white.opacity(isDragHandleHovering ? 0.5 : 0.25))
+                .frame(width: 36, height: 4)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 16)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isDragHandleHovering = hovering
+        }
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    let newExtra = extraHeight + value.translation.height
+                    extraHeight = max(0, min(300, newExtra))
+                }
+        )
     }
 
     // MARK: - Progress Bar
@@ -232,6 +328,17 @@ struct TeleprompterContentView: View {
                 )
                 .frame(width: 80, height: 20)
                 .transition(.opacity)
+
+                // Last spoken words (Feature 3)
+                if listeningMode == .wordTracking {
+                    Text(speechManager.lastSpokenWords)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .frame(maxWidth: 100, alignment: .leading)
+                        .transition(.opacity)
+                }
             }
 
             // Mic toggle (non-classic modes)
@@ -296,11 +403,14 @@ struct TeleprompterContentView: View {
                     .transition(.opacity)
             }
 
-            // Page indicator
+            // Page indicator (tappable for page picker) — Feature 2
             if let script = scriptStorage.currentScript, script.pages.count > 1 {
                 Text("\(scrollingController.currentPageIndex + 1)/\(script.pages.count)")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                     .foregroundColor(.white.opacity(0.4))
+                    .contentShape(Rectangle())
+                    .onTapGesture { showPagePicker = true }
+                    .onLongPressGesture { showPagePicker = true }
             }
 
             // Reset
@@ -322,34 +432,151 @@ struct TeleprompterContentView: View {
         .animation(Theme.quickSpring, value: speechManager.isListening)
     }
 
-    // MARK: - Next Page View
+    // MARK: - Next Page View (with auto-countdown — Feature 1)
 
     private var nextPageView: some View {
         VStack(spacing: 12) {
-            Button {
-                advanceToNextPage()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 16, weight: .bold))
-                    Text("Next Page")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(Theme.accentPrimary.opacity(0.85))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
+            if autoNextPage && autoNextCountdown > 0 {
+                // Countdown mode
+                VStack(spacing: 8) {
+                    Text("Next page in")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
 
-            Button(action: onClose) {
-                Text("Done")
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+                    Text("\(autoNextCountdown)")
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.accentGradient)
+                        .contentTransition(.numericText())
+                        .animation(Theme.springAnimation, value: autoNextCountdown)
+
+                    Button {
+                        stopAutoNextTimer()
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.ultraThinMaterial))
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Button {
+                    markCurrentPageRead()
+                    advanceToNextPage()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 16, weight: .bold))
+                        Text("Next Page")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Theme.accentPrimary.opacity(0.85))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onClose) {
+                    Text("Done")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - Page Picker Overlay (Feature 2)
+
+    private var pagePickerOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .contentShape(Rectangle())
+                .onTapGesture { showPagePicker = false }
+
+            VStack(spacing: 0) {
+                Text("Jump to Page")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(.vertical, 10)
+
+                Divider().opacity(0.3)
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        if let script = scriptStorage.currentScript {
+                            ForEach(Array(script.pages.enumerated()), id: \.offset) { index, page in
+                                Button {
+                                    scrollingController.currentPageIndex = index
+                                    showPagePicker = false
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Text("\(index + 1)")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(scrollingController.currentPageIndex == index ? Theme.accentPrimary : .white.opacity(0.5))
+                                            .frame(width: 20)
+
+                                        Text(pagePickerPreview(page))
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.white.opacity(0.8))
+                                            .lineLimit(1)
+                                            .truncationMode(.tail)
+
+                                        Spacer()
+
+                                        if scriptStorage.readPageIndices.contains(index) {
+                                            Circle()
+                                                .fill(Color.green)
+                                                .frame(width: 6, height: 6)
+                                        }
+
+                                        if scrollingController.currentPageIndex == index {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundStyle(Theme.accentPrimary)
+                                        }
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        scrollingController.currentPageIndex == index
+                                            ? Theme.accentPrimary.opacity(0.1)
+                                            : Color.clear
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                if index < (scriptStorage.currentScript?.pages.count ?? 1) - 1 {
+                                    Divider().opacity(0.15)
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 160)
+            }
+            .frame(width: 280)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.9))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func pagePickerPreview(_ page: String) -> String {
+        let trimmed = page.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "Empty page" }
+        let words = trimmed.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        return words.prefix(8).joined(separator: " ")
     }
 
     // MARK: - Title Flash
@@ -369,6 +596,30 @@ struct TeleprompterContentView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation(Theme.smoothEase) { showTitleFlash = false }
         }
+    }
+
+    // MARK: - Auto Next Page Timer (Feature 1)
+
+    private func startAutoNextTimer() {
+        stopAutoNextTimer()
+        autoNextCountdown = autoNextPageDelay
+        autoNextTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [self] _ in
+            DispatchQueue.main.async {
+                if self.autoNextCountdown > 1 {
+                    self.autoNextCountdown -= 1
+                } else {
+                    self.stopAutoNextTimer()
+                    self.markCurrentPageRead()
+                    self.advanceToNextPage()
+                }
+            }
+        }
+    }
+
+    private func stopAutoNextTimer() {
+        autoNextTimer?.invalidate()
+        autoNextTimer = nil
+        autoNextCountdown = 0
     }
 
     // MARK: - Helpers
@@ -393,6 +644,7 @@ struct TeleprompterContentView: View {
         scrollingController.setTotalLines(words.count)
         startSpeechIfNeeded()
         flashTitle()
+        stopAutoNextTimer()
     }
 
     private func resetForNewPage() {
@@ -402,6 +654,11 @@ struct TeleprompterContentView: View {
         scrollingController.recognizedCharCount = 0
         scrollingController.setTotalLines(words.count)
         startSpeechIfNeeded()
+        stopAutoNextTimer()
+    }
+
+    private func markCurrentPageRead() {
+        scriptStorage.readPageIndices.insert(scrollingController.currentPageIndex)
     }
 
     private func advanceToNextPage() {
@@ -427,7 +684,9 @@ struct TeleprompterContentView: View {
             case 49:  // Space
                 if listeningMode == .classic { toggleClassicScroll() }
                 return nil
-            case 53: onClose(); return nil
+            case 53: // ESC
+                if showPagePicker { showPagePicker = false; return nil }
+                onClose(); return nil
             default: return event
             }
         }

@@ -7,6 +7,13 @@ struct SettingsView: View {
     @AppStorage("overlay.opacity") private var backgroundOpacity: Double = 0.85
     @AppStorage("overlay.textColor") private var textColorHex: String = "#FFFFFF"
     @AppStorage("overlay.showElapsedTime") private var showElapsedTime: Bool = true
+    @AppStorage("overlay.autoNextPage") private var autoNextPage: Bool = false
+    @AppStorage("overlay.autoNextPageDelay") private var autoNextPageDelay: Int = 3
+    @AppStorage("overlay.useTransparency") private var useTransparency: Bool = false
+    @AppStorage("overlay.transparencyOpacity") private var transparencyOpacity: Double = 0.85
+
+    // Available input devices for mic picker
+    @State private var inputDevices: [AudioInputDevice] = []
 
     var body: some View {
         TabView {
@@ -19,13 +26,19 @@ struct SettingsView: View {
             scrollingTab
                 .tabItem { Label("Scrolling", systemImage: "arrow.up.arrow.down") }
 
+            overlayTab
+                .tabItem { Label("Overlay", systemImage: "rectangle.topthird.inset.filled") }
+
             shortcutsTab
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
 
             aboutTab
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 480, height: 460)
+        .frame(width: 480, height: 500)
+        .onAppear {
+            inputDevices = AudioInputDevice.allInputDevices()
+        }
     }
 
     // MARK: - Appearance Tab
@@ -145,6 +158,57 @@ struct SettingsView: View {
             }
 
             Section {
+                // Cue Color (Feature 9)
+                LabeledContent {
+                    Picker("", selection: $scrollingController.cueColorHex) {
+                        HStack { Circle().fill(Color(hex: "DAFFAA")).frame(width: 10, height: 10); Text("Lime") }.tag("DAFFAA")
+                        HStack { Circle().fill(Color(hex: "FFEB3B")).frame(width: 10, height: 10); Text("Yellow") }.tag("FFEB3B")
+                        HStack { Circle().fill(Color(hex: "00BCD4")).frame(width: 10, height: 10); Text("Cyan") }.tag("00BCD4")
+                        HStack { Circle().fill(Color(hex: "4CAF50")).frame(width: 10, height: 10); Text("Green") }.tag("4CAF50")
+                        HStack { Circle().fill(Color(hex: "C4B5FD")).frame(width: 10, height: 10); Text("Lavender") }.tag("C4B5FD")
+                        HStack { Circle().fill(Color(hex: "FF9500")).frame(width: 10, height: 10); Text("Orange") }.tag("FF9500")
+                    }
+                    .labelsHidden()
+                    .frame(width: 120)
+                } label: {
+                    Label("Cue Color", systemImage: "paintpalette.fill")
+                }
+
+                // Cue Brightness (Feature 9)
+                LabeledContent {
+                    Picker("", selection: $scrollingController.cueBrightness) {
+                        ForEach(CueBrightness.allCases) { brightness in
+                            Text(brightness.label).tag(brightness)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                } label: {
+                    Label("Cue Brightness", systemImage: "sun.max")
+                }
+
+                // Transparency (Feature 5)
+                Toggle(isOn: $useTransparency) {
+                    Label("Blur Background", systemImage: "circle.lefthalf.filled.righthalf.striped.horizontal")
+                }
+
+                if useTransparency {
+                    LabeledContent {
+                        HStack {
+                            Slider(value: $transparencyOpacity, in: 0.3...1.0, step: 0.05)
+                            Text("\(Int(transparencyOpacity * 100))%")
+                                .monospacedDigit()
+                                .frame(width: 40)
+                        }
+                    } label: {
+                        Label("Opacity", systemImage: "circle.lefthalf.filled")
+                    }
+                }
+            } header: {
+                Text("Cues & Transparency")
+            }
+
+            Section {
                 previewWidget
             } header: {
                 Text("Preview")
@@ -158,6 +222,10 @@ struct SettingsView: View {
                         textColorHex = "#FFFFFF"
                         backgroundOpacity = 0.85
                         showElapsedTime = true
+                        scrollingController.cueColorHex = "DAFFAA"
+                        scrollingController.cueBrightness = .medium
+                        useTransparency = false
+                        transparencyOpacity = 0.85
                     }
                 }
                 .foregroundColor(.red)
@@ -238,6 +306,49 @@ struct SettingsView: View {
                 } header: {
                     Text("Permissions")
                 }
+
+                // Speech Language (Feature 10)
+                Section {
+                    LabeledContent {
+                        Picker("", selection: $scrollingController.speechLocale) {
+                            Text("English (US)").tag("en-US")
+                            Text("English (UK)").tag("en-GB")
+                            Text("Spanish").tag("es-ES")
+                            Text("French").tag("fr-FR")
+                            Text("German").tag("de-DE")
+                            Text("Italian").tag("it-IT")
+                            Text("Portuguese (BR)").tag("pt-BR")
+                            Text("Japanese").tag("ja-JP")
+                            Text("Chinese (Simplified)").tag("zh-CN")
+                        }
+                        .labelsHidden()
+                        .frame(width: 180)
+                    } label: {
+                        Label("Language", systemImage: "globe")
+                    }
+                } header: {
+                    Text("Speech Recognition")
+                }
+
+                // Microphone Selection (Feature 11)
+                if !inputDevices.isEmpty {
+                    Section {
+                        LabeledContent {
+                            Picker("", selection: $scrollingController.selectedMicUID) {
+                                Text("System Default").tag("")
+                                ForEach(inputDevices) { device in
+                                    Text(device.name).tag(device.uid)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 180)
+                        } label: {
+                            Label("Microphone", systemImage: "mic.circle")
+                        }
+                    } header: {
+                        Text("Input Device")
+                    }
+                }
             }
 
             if scrollingController.listeningMode == .classic {
@@ -301,6 +412,20 @@ struct SettingsView: View {
                     Label("Countdown Timer", systemImage: "timer")
                 }
 
+                // Auto Next Page (Feature 1)
+                Toggle(isOn: $autoNextPage) {
+                    Label("Auto-Advance Pages", systemImage: "arrow.right.circle")
+                }
+
+                if autoNextPage {
+                    LabeledContent {
+                        Stepper("\(autoNextPageDelay)s", value: $autoNextPageDelay, in: 1...10)
+                            .frame(width: 100)
+                    } label: {
+                        Label("Countdown Delay", systemImage: "timer")
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Hover to Pause", systemImage: "hand.raised")
                     Text("Auto-scroll pauses when you hover over the overlay.")
@@ -317,9 +442,82 @@ struct SettingsView: View {
                         scrollingController.wordsPerMinute = 150
                         scrollingController.mode = .auto
                         scrollingController.useCountdown = true
+                        autoNextPage = false
+                        autoNextPageDelay = 3
                     }
                 }
                 .foregroundColor(.red)
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    // MARK: - Overlay Tab (Feature 8)
+
+    private var overlayTab: some View {
+        Form {
+            Section {
+                // Overlay mode picker
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        ForEach(OverlayDisplayMode.allCases) { mode in
+                            Button {
+                                withAnimation(Theme.smoothEase) {
+                                    scrollingController.overlayDisplayMode = mode
+                                }
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Image(systemName: mode.icon)
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundStyle(scrollingController.overlayDisplayMode == mode ? Theme.accentPrimary : .secondary)
+                                    Text(mode.rawValue)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(scrollingController.overlayDisplayMode == mode ? Theme.accentPrimary : .secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(scrollingController.overlayDisplayMode == mode
+                                              ? Theme.accentPrimary.opacity(0.12)
+                                              : Color.primary.opacity(0.05))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .strokeBorder(scrollingController.overlayDisplayMode == mode
+                                                              ? Theme.accentPrimary.opacity(0.4)
+                                                              : Color.clear, lineWidth: 1.5)
+                                        )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Text(scrollingController.overlayDisplayMode.description)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Display Mode")
+            }
+
+            Section {
+                Toggle(isOn: Binding(
+                    get: { UserDefaults.standard.bool(forKey: "overlay.followMouse") == false ? false : true },
+                    set: { UserDefaults.standard.set($0, forKey: "overlay.followMouse") }
+                )) {
+                    Label("Follow Mouse (Multi-Display)", systemImage: "display.2")
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("When enabled, the overlay appears on whichever screen your mouse is on.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Multi-Display")
             }
         }
         .formStyle(.grouped)

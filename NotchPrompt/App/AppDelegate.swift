@@ -22,6 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupOverlay()
         setupVoiceScrolling()
         setupGlobalHotkeys()
+
+        // Feature 13: Check for updates silently on launch
+        UpdateChecker.shared.checkForUpdates(silent: true)
+
+        // Feature 14: Register as services provider
+        NSApp.servicesProvider = self
+        NSUpdateDynamicServices()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -29,6 +36,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         globalMonitors.removeAll()
         iconPulseTimer?.invalidate()
         speechManager.forceStop()
+    }
+
+    // Feature 16: Unsaved changes — scripts auto-save, so just terminate
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        return .terminateNow
+    }
+
+    // Feature 15: URL scheme handler (notchprompt://read?text=...)
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard url.scheme == "notchprompt", url.host == "read",
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let text = components.queryItems?.first(where: { $0.name == "text" })?.value
+            else { continue }
+            let script = Script(title: "Quick Read", content: text)
+            scriptStorage.create(script)
+            overlayController?.show()
+        }
+    }
+
+    // Feature 14: macOS Services handler
+    @objc func readInNotchPrompt(_ pboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        guard let text = pboard.string(forType: .string) else { return }
+        let script = Script(title: "Quick Read", content: text)
+        scriptStorage.create(script)
+        overlayController?.show()
     }
 
     // MARK: - Setup
@@ -74,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Reset Position", action: #selector(resetScroll), keyEquivalent: "r"))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Settings...", action: #selector(showSettings), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "About NotchPrompt", action: #selector(showAbout), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
@@ -315,5 +349,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    // Feature 13: Check for updates action
+    @objc private func checkForUpdates() {
+        UpdateChecker.shared.checkForUpdates(silent: false)
     }
 }

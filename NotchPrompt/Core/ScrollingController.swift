@@ -93,6 +93,34 @@ enum FontSizePreset: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Cue Brightness
+
+enum CueBrightness: String, CaseIterable, Identifiable {
+    case dim, low, medium, bright
+
+    var id: String { rawValue }
+
+    var label: String { rawValue.capitalized }
+
+    var unreadOpacity: Double {
+        switch self {
+        case .dim:    return 0.2
+        case .low:    return 0.35
+        case .medium: return 0.5
+        case .bright: return 0.8
+        }
+    }
+
+    var readOpacity: Double {
+        switch self {
+        case .dim:    return 0.5
+        case .low:    return 0.6
+        case .medium: return 0.7
+        case .bright: return 1.0
+        }
+    }
+}
+
 // MARK: - Overlay Mode
 
 enum OverlayDisplayMode: String, CaseIterable, Identifiable {
@@ -143,7 +171,27 @@ final class ScrollingController: ObservableObject {
     @Published var fontSizePreset: FontSizePreset = .lg
 
     // Overlay mode
-    @Published var overlayDisplayMode: OverlayDisplayMode = .notch
+    @Published var overlayDisplayMode: OverlayDisplayMode = .notch {
+        didSet { UserDefaults.standard.set(overlayDisplayMode.rawValue, forKey: "overlay.displayMode") }
+    }
+
+    // Cue color and brightness (Feature 9)
+    @Published var cueColorHex: String = "DAFFAA" {
+        didSet { UserDefaults.standard.set(cueColorHex, forKey: "overlay.cueColorHex") }
+    }
+    @Published var cueBrightness: CueBrightness = .medium {
+        didSet { UserDefaults.standard.set(cueBrightness.rawValue, forKey: "overlay.cueBrightness") }
+    }
+
+    // Speech locale (Feature 10)
+    @Published var speechLocale: String = Locale.current.identifier {
+        didSet { UserDefaults.standard.set(speechLocale, forKey: "speech.locale") }
+    }
+
+    // Microphone selection (Feature 11)
+    @Published var selectedMicUID: String = "" {
+        didSet { UserDefaults.standard.set(selectedMicUID, forKey: "speech.micUID") }
+    }
 
     // Word tracking (for word-level highlight mode)
     @Published var recognizedCharCount: Int = 0
@@ -158,6 +206,27 @@ final class ScrollingController: ObservableObject {
     private var autoScrollTimer: Timer?
     private var countdownTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        // Restore persisted settings
+        if let raw = UserDefaults.standard.string(forKey: "overlay.displayMode"),
+           let mode = OverlayDisplayMode(rawValue: raw) {
+            overlayDisplayMode = mode
+        }
+        if let raw = UserDefaults.standard.string(forKey: "overlay.cueColorHex") {
+            cueColorHex = raw
+        }
+        if let raw = UserDefaults.standard.string(forKey: "overlay.cueBrightness"),
+           let brightness = CueBrightness(rawValue: raw) {
+            cueBrightness = brightness
+        }
+        if let raw = UserDefaults.standard.string(forKey: "speech.locale") {
+            speechLocale = raw
+        }
+        if let raw = UserDefaults.standard.string(forKey: "speech.micUID") {
+            selectedMicUID = raw
+        }
+    }
 
     var scrollSpeed: CGFloat {
         CGFloat(wordsPerMinute) / 60.0 * 20.0

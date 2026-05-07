@@ -7,6 +7,9 @@ final class ScriptStorage: ObservableObject {
     @Published private(set) var scripts: [Script] = []
     @Published var currentScript: Script?
 
+    // Feature 12: Read pages tracking
+    @Published var readPageIndices: Set<Int> = []
+
     private let storageKey = "notchprompt.scripts"
     private let currentScriptKey = "notchprompt.currentScriptId"
 
@@ -92,6 +95,7 @@ final class ScriptStorage: ObservableObject {
 
     func select(_ script: Script) {
         currentScript = script
+        readPageIndices = []  // Reset read tracking on script change
         persistToDisk()
     }
 
@@ -117,6 +121,7 @@ final class ScriptStorage: ObservableObject {
         panel.allowedContentTypes = [
             UTType(filenameExtension: "notchprompt") ?? .data,
             UTType(filenameExtension: "pptx") ?? .data,
+            UTType(filenameExtension: "key") ?? .data,
         ]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -124,7 +129,16 @@ final class ScriptStorage: ObservableObject {
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             let ext = url.pathExtension.lowercased()
-            if ext == "pptx" {
+            if ext == "key" {
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = "Keynote files can't be imported directly"
+                    alert.informativeText = "Export your Keynote presentation as PowerPoint (.pptx) first:\n\nIn Keynote: File → Export To → PowerPoint…"
+                    alert.alertStyle = .informational
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+            } else if ext == "pptx" {
                 self?.importPPTX(from: url)
             } else {
                 self?.openNotchPromptFile(url)

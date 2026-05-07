@@ -10,6 +10,10 @@ struct ScriptEditorView: View {
     @State private var isDroppingPPTX = false
     @State private var dropError: String?
 
+    // Feature 19: Dictation
+    @State private var isDictating: Bool = false
+    @StateObject private var dictation = DictationManager()
+
     private var currentPageContent: Binding<String> {
         Binding(
             get: {
@@ -162,9 +166,18 @@ struct ScriptEditorView: View {
                 )) {
                     ForEach(Array(script.pages.enumerated()), id: \.offset) { index, page in
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Page \(index + 1)")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(currentPageIndex == index ? Theme.accentPrimary : .secondary)
+                            HStack(spacing: 4) {
+                                Text("Page \(index + 1)")
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(currentPageIndex == index ? Theme.accentPrimary : .secondary)
+
+                                // Feature 12: Read page indicator
+                                if storage.readPageIndices.contains(index) {
+                                    Circle()
+                                        .fill(Color.green)
+                                        .frame(width: 6, height: 6)
+                                }
+                            }
 
                             Text(pagePreview(page))
                                 .font(.system(size: 10))
@@ -248,12 +261,46 @@ struct ScriptEditorView: View {
                 if isDroppingPPTX {
                     dropZoneOverlay
                 }
+
+                // Feature 19: Dictation button
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            toggleDictation()
+                        } label: {
+                            Image(systemName: isDictating ? "mic.fill" : "mic")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(isDictating ? Theme.accentPrimary : .secondary)
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Circle()
+                                        .fill(isDictating ? Theme.accentPrimary.opacity(0.15) : Color.primary.opacity(0.08))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(isDictating ? "Stop Dictation" : "Start Dictation")
+                        .padding(12)
+                    }
+                }
+            }
+            .onAppear {
+                dictation.onTextUpdate = { [self] text in
+                    appendDictatedText(text)
+                }
             }
             .onDrop(of: [.fileURL], isTargeted: $isDroppingPPTX) { providers in
                 guard let provider = providers.first else { return false }
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url else { return }
                     let ext = url.pathExtension.lowercased()
+                    if ext == "key" {
+                        DispatchQueue.main.async {
+                            self.dropError = "Keynote files can't be imported directly. Export as PowerPoint (.pptx) first:\nIn Keynote: File → Export To → PowerPoint…"
+                        }
+                        return
+                    }
                     guard ext == "pptx" else {
                         DispatchQueue.main.async {
                             self.dropError = "Only .pptx files are supported. For Keynote, export as PowerPoint first."
@@ -358,6 +405,31 @@ struct ScriptEditorView: View {
             editingTitle = "New Script"
             currentPageIndex = 0
         }
+    }
+
+    // MARK: - Dictation (Feature 19)
+
+    private func toggleDictation() {
+        if isDictating {
+            dictation.stop()
+            isDictating = false
+        } else {
+            dictation.onTextUpdate = { [self] text in
+                appendDictatedText(text)
+            }
+            dictation.start()
+            isDictating = true
+        }
+    }
+
+    private func appendDictatedText(_ text: String) {
+        guard var script = storage.currentScript,
+              currentPageIndex < script.pages.count else { return }
+        let current = script.pages[currentPageIndex]
+        // Replace the last dictated segment or append
+        let separator = current.isEmpty ? "" : " "
+        script.pages[currentPageIndex] = current + separator + text
+        storage.update(script)
     }
 }
 
