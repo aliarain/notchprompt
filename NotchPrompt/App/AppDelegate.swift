@@ -175,12 +175,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func startIconPulse() {
         iconPulseTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-            guard let self, let button = self.statusItem?.button else { return }
-            self.iconPulseToggle.toggle()
-            button.image = NSImage(
-                systemSymbolName: self.iconPulseToggle ? "waveform" : "text.alignleft",
-                accessibilityDescription: "NotchPrompt"
-            )
+            DispatchQueue.main.async {
+                guard let self, let button = self.statusItem?.button else { return }
+                self.iconPulseToggle.toggle()
+                button.image = NSImage(
+                    systemSymbolName: self.iconPulseToggle ? "waveform" : "text.alignleft",
+                    accessibilityDescription: "NotchPrompt"
+                )
+            }
         }
     }
 
@@ -302,15 +304,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showSettings() {
-        if let window = settingsWindow {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
+        // Always recreate so settings reflect current state
+        settingsWindow?.close()
+        settingsWindow = nil
 
         let settingsView = SettingsView(scrollingController: scrollingController)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 480),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

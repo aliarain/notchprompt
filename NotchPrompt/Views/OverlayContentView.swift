@@ -191,6 +191,13 @@ struct TeleprompterContentView: View {
         .onChange(of: scrollingController.currentPageIndex) { _, _ in
             resetForNewPage()
         }
+        .onChange(of: scrollingController.listeningMode) { _, _ in
+            // Restart speech when mode changes while overlay is open
+            speechManager.forceStop()
+            timerWordProgress = 0
+            isPaused = false
+            startSpeechIfNeeded()
+        }
         .onHover { hovering in
             isHovering = hovering
             if hovering {

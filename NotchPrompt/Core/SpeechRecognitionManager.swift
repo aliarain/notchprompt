@@ -39,20 +39,22 @@ struct AudioInputDevice: Identifiable, Hashable {
                 mScope: kAudioObjectPropertyScopeGlobal,
                 mElement: kAudioObjectPropertyElementMain
             )
-            var uid: CFString = "" as CFString
-            var uidSize = UInt32(MemoryLayout<CFString>.size)
-            guard AudioObjectGetPropertyData(deviceID, &uidAddress, 0, nil, &uidSize, &uid) == noErr else { continue }
+            var uidRef: Unmanaged<CFString>? = nil
+            var uidSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            guard AudioObjectGetPropertyData(deviceID, &uidAddress, 0, nil, &uidSize, &uidRef) == noErr,
+                  let uid = uidRef?.takeRetainedValue() as String? else { continue }
 
             var nameAddress = AudioObjectPropertyAddress(
                 mSelector: kAudioDevicePropertyDeviceNameCFString,
                 mScope: kAudioObjectPropertyScopeGlobal,
                 mElement: kAudioObjectPropertyElementMain
             )
-            var name: CFString = "" as CFString
-            var nameSize = UInt32(MemoryLayout<CFString>.size)
-            guard AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, &name) == noErr else { continue }
+            var nameRef: Unmanaged<CFString>? = nil
+            var nameSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+            guard AudioObjectGetPropertyData(deviceID, &nameAddress, 0, nil, &nameSize, &nameRef) == noErr,
+                  let name = nameRef?.takeRetainedValue() as String? else { continue }
 
-            result.append(AudioInputDevice(id: deviceID, uid: uid as String, name: name as String))
+            result.append(AudioInputDevice(id: deviceID, uid: uid, name: name))
         }
         return result
     }
@@ -226,7 +228,12 @@ final class SpeechRecognitionManager: ObservableObject {
         retryCount = 0
         matchStartOffset = recognizedCharCount
         shouldDismiss = false
-        beginRecognition()
+        // Go through full auth flow in case permissions changed
+        if sourceText.isEmpty {
+            startListening()
+        } else {
+            requestAuthAndBegin()
+        }
     }
 
     func toggleListening() {
@@ -246,11 +253,16 @@ final class SpeechRecognitionManager: ObservableObject {
     private func requestAuthAndBegin() {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .denied, .restricted:
+            // Can't access mic — notify on main thread so UI can react
+            DispatchQueue.main.async {
+                self.isListening = false
+            }
             return
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
                 DispatchQueue.main.async {
                     if granted { self?.requestSpeechAuthAndBegin() }
+                    else { self?.isListening = false }
                 }
             }
             return
@@ -263,10 +275,20 @@ final class SpeechRecognitionManager: ObservableObject {
     }
 
     private func requestSpeechAuthAndBegin() {
+        // If already authorized, skip the async request to avoid delays
+        let currentStatus = SFSpeechRecognizer.authorizationStatus()
+        if currentStatus == .authorized {
+            beginRecognition()
+            return
+        }
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             DispatchQueue.main.async {
                 self?.authorizationStatus = status
-                if status == .authorized { self?.beginRecognition() }
+                if status == .authorized {
+                    self?.beginRecognition()
+                } else {
+                    self?.isListening = false
+                }
             }
         }
     }

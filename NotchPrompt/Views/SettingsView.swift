@@ -1,5 +1,31 @@
 import SwiftUI
 
+// MARK: - Settings Section enum
+
+private enum SettingsSection: String, CaseIterable, Identifiable {
+    case appearance = "Appearance"
+    case guidance   = "Guidance"
+    case scrolling  = "Scrolling"
+    case overlay    = "Overlay"
+    case shortcuts  = "Shortcuts"
+    case about      = "About"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .appearance: return "paintbrush"
+        case .guidance:   return "waveform"
+        case .scrolling:  return "arrow.up.arrow.down"
+        case .overlay:    return "rectangle.topthird.inset.filled"
+        case .shortcuts:  return "keyboard"
+        case .about:      return "info.circle"
+        }
+    }
+}
+
+// MARK: - SettingsView
+
 struct SettingsView: View {
     @ObservedObject var scrollingController: ScrollingController
 
@@ -13,30 +39,75 @@ struct SettingsView: View {
     @AppStorage("overlay.transparencyOpacity") private var transparencyOpacity: Double = 0.85
     @AppStorage("overlay.followMouse") private var followMouse: Bool = true
 
-    // Available input devices for mic picker
+    @State private var selectedSection: SettingsSection = .appearance
     @State private var inputDevices: [AudioInputDevice] = []
 
     var body: some View {
-        TabView {
-            appearanceTab
-                .tabItem { Label("Appearance", systemImage: "paintbrush") }
+        HStack(spacing: 0) {
+            // MARK: Sidebar
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(SettingsSection.allCases) { section in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedSection = section
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: section.icon)
+                                .font(.system(size: 13, weight: .medium))
+                                .frame(width: 18, height: 18)
+                                .foregroundStyle(selectedSection == section ? .white : Theme.accentPrimary)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(selectedSection == section
+                                              ? Theme.accentPrimary
+                                              : Theme.accentPrimary.opacity(0.12))
+                                        .frame(width: 28, height: 28)
+                                )
+                                .frame(width: 28, height: 28)
 
-            guidanceTab
-                .tabItem { Label("Guidance", systemImage: "waveform") }
+                            Text(section.rawValue)
+                                .font(.system(size: 13, weight: selectedSection == section ? .semibold : .regular))
+                                .foregroundStyle(selectedSection == section ? .primary : .secondary)
 
-            scrollingTab
-                .tabItem { Label("Scrolling", systemImage: "arrow.up.arrow.down") }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(selectedSection == section
+                                      ? Color.primary.opacity(0.07)
+                                      : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
 
-            overlayTab
-                .tabItem { Label("Overlay", systemImage: "rectangle.topthird.inset.filled") }
+                Spacer()
+            }
+            .padding(12)
+            .frame(width: 170)
+            .frame(maxHeight: .infinity)
+            .background(Color.primary.opacity(0.03))
 
-            shortcutsTab
-                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+            Divider()
 
-            aboutTab
-                .tabItem { Label("About", systemImage: "info.circle") }
+            // MARK: Content
+            Group {
+                switch selectedSection {
+                case .appearance: appearanceTab
+                case .guidance:   guidanceTab
+                case .scrolling:  scrollingTab
+                case .overlay:    overlayTab
+                case .shortcuts:  shortcutsTab
+                case .about:      aboutTab
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 480, height: 500)
+        .frame(width: 640, height: 520)
         .onAppear {
             inputDevices = AudioInputDevice.allInputDevices()
         }

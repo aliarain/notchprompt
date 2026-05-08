@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Microphone access — required for speech recognition -->
+	<key>com.apple.security.device.microphone</key>
+	<true/>
+
+	<!-- Audio input — required for AVAudioEngine -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- Network client — required for update checker (GitHub API) -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Read-only access to user-selected files (PPTX import) -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+
+	<!-- Read/write access to user-selected files (save .notchprompt files) -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>
